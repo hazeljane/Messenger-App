@@ -1,0 +1,97 @@
+.message-requests-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  margin: 12px 0;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--surface-color);
+  color: var(--text-color);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.message-requests-button:hover {
+  background: var(--hover-color);
+}
+
+.message-requests-icon {
+  display: grid;
+  place-items: center;
+}
+
+.message-requests-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.message-requests-copy small {
+  color: var(--muted-text);
+  font-size: 11px;
+}
+
+.message-requests-count {
+  min-width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0 6px;
+  border-radius: 50px;
+  background: var(--accent-color);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+}.message-requests-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  margin: 12px 0;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--surface-color);
+  color: var(--text-color);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.message-requests-button:hover {
+  background: var(--hover-color);
+}
+
+.message-requests-icon {
+  display: grid;
+  place-items: center;
+}
+
+.message-requests-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.message-requests-copy small {
+  color: var(--muted-text);
+  font-size: 11px;
+}
+
+.message-requests-count {
+  min-width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0 6px;
+  border-radius: 50px;
+  background: var(--accent-color);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+}

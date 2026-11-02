@@ -22,7 +22,6 @@ import messageRoutes from "./routes/messages.js";
 import { configureSocketAuth } from "./utils/socketAuth.js";
 import { registerSocketHandlers } from "./sockets/index.js";
 
-import messageHistoryRoutes from "./routes/messageHistory.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -93,7 +92,6 @@ app.use("/api/users", userRoutes);
 app.use("/api/groups", groupRoutes);
 app.use("/api/uploads", uploadRoutes);
 
-app.use("/api/messages", messageHistoryRoutes);
 app.use("/api/messages", messageRoutes);
 
 // Socket.IO

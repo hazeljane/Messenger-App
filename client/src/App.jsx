@@ -25,8 +25,11 @@ import { sameId } from "./utils/chatHelpers.js";
 import useMessageActions from "./hooks/useMessageActions";
 import useChatMessages from "./hooks/useChatMessages";
 import useChatSocket from "./hooks/useChatSocket";
-
+import MessageRequestsModal from "./components/MessageRequestsModal.jsx";
 export default function App() {
+  console.log("API object:", api);
+console.log("API methods:", Object.keys(api));
+console.log("getMessageRequests:", api.getMessageRequests);
   const [user, setUser] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [chats, setChats] = useState([]);
@@ -35,13 +38,17 @@ export default function App() {
 
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
+  // Private message requests
   const [newSearch, setNewSearch] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [toast, setToast] = useState("");
   const [showActiveStatus, setShowActiveStatus] = useState(true);
   const [savingActiveStatus, setSavingActiveStatus] = useState(false);
   const [error, setError] = useState("");
+  const [messageRequests, setMessageRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [showMessageRequests, setShowMessageRequests] = useState(false);
   const [onlineIds, setOnlineIds] = useState(() => new Set());
   const [menuOpen, setMenuOpen] = useState(false);
   const [socketStatus, setSocketStatus] = useState("connecting");
@@ -80,6 +87,40 @@ const showNotice = useCallback((message) => {
 
   toastTimer.current = window.setTimeout(() => setToast(""), 2800);
 }, []);
+const loadMessageRequests = useCallback(async () => {
+  if (!user) return;
+
+  setLoadingRequests(true);
+
+  try {
+    const { requests } = await api.getMessageRequests();
+    setMessageRequests(requests || []);
+  } catch (err) {
+    console.error("Could not load message requests:", err);
+  } finally {
+    setLoadingRequests(false);
+  }
+}, [user]);
+// Reload requests whenever the recipient opens the modal.
+useEffect(() => {
+  if (!user || !showMessageRequests) return;
+
+  loadMessageRequests();
+}, [user, showMessageRequests, loadMessageRequests]);
+function handleAcceptedRequest(userId) {
+  const requestedUser = chats.find((chat) =>
+    sameId(chat.id, userId)
+  );
+
+  if (requestedUser) {
+    selectChat({
+      ...requestedUser,
+      conversationStatus: "accepted",
+    });
+  }
+
+  loadMessageRequests();
+}
   const {
   sendMessage,
   handleReply,
@@ -494,6 +535,30 @@ async function handleThemeChange(nextTheme) {
     };
   }, [user]);
 
+// Load incoming private message requests.
+useEffect(() => {
+  if (!user) {
+    setMessageRequests([]);
+    return;
+  }
+
+  loadMessageRequests();
+}, [user, loadMessageRequests]);
+
+// Refresh requests when a new private message arrives.
+useEffect(() => {
+  if (!socket) return;
+
+  function handleNewMessage() {
+    loadMessageRequests();
+  }
+
+  socket.on("message:new", handleNewMessage);
+
+  return () => {
+    socket.off("message:new", handleNewMessage);
+  };
+}, [socket, loadMessageRequests]);
 
   // Load the selected conversation's history.
   useEffect(() => {
@@ -566,6 +631,8 @@ async function handleThemeChange(nextTheme) {
     setUser(null);
     setChats([]);
     setActiveId("");
+    setMessageRequests([]);
+    setShowMessageRequests(false);
     setMobileChatOpen(false);
     setMenuOpen(false);
     setGroups([]);
@@ -682,7 +749,13 @@ async function handleThemeChange(nextTheme) {
 
   
 useEffect(() => {
-  if (!activeChat || activeChat.isGroup) return;
+ if (
+  !activeChat ||
+  activeChat.isGroup ||
+  activeChat.conversationStatus !== "accepted"
+) {
+  return;
+}
 
   console.log("Active chat:", activeChat);
   console.log("Chat ID:", activeChat.id);
@@ -718,7 +791,11 @@ useEffect(() => {
   return () => {
     cancelled = true;
   };
-}, [activeChat?.id, activeChat?.isGroup]);
+}, [
+  activeChat?.id,
+  activeChat?.isGroup,
+  activeChat?.conversationStatus,
+]);
 
   if (checkingSession) {
     return (
@@ -766,6 +843,8 @@ useEffect(() => {
           setGroupName={setGroupName}
 setNewSearch={setNewSearch}
 setShowSettings={setShowSettings}
+messageRequestCount={messageRequests.length}
+setShowMessageRequests={setShowMessageRequests}
         />
       </div>
 
@@ -787,6 +866,8 @@ setShowSettings={setShowSettings}
               showNotice={showNotice}
               handleDeleteGroup={handleDeleteGroup}
               onOpenBackgroundPicker={openBackgroundPicker}
+              messageRequestCount={messageRequests.length}
+              setShowMessageRequests={setShowMessageRequests}
             />
 
             <ChatError error={error} onDismiss={() => setError("")} />
@@ -865,7 +946,16 @@ setShowSettings={setShowSettings}
   onActiveStatusChange={handleActiveStatusChange}
   savingActiveStatus={savingActiveStatus}
 />
-
+{showMessageRequests && (
+  <MessageRequestsModal
+    requests={messageRequests}
+    loading={loadingRequests}
+    onClose={() => setShowMessageRequests(false)}
+    onRequestUpdated={loadMessageRequests}
+    onAccepted={handleAcceptedRequest}
+    showNotice={showNotice}
+  />
+)}
 <ChatBackgroundPicker
   isOpen={backgroundPickerOpen}
   onClose={() => setBackgroundPickerOpen(false)}

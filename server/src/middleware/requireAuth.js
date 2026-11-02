@@ -16,7 +16,7 @@ export async function requireAuth(req, res, next) {
     const payload = jwt.verify(token, config.jwtSecret);
 
     const user = await User.findById(payload.userId).select(
-      "_id username email role canPrivateMessage theme"
+      "_id username email role theme"
     );
 
     if (!user) {

@@ -2,6 +2,7 @@ import { Router } from "express";
 import mongoose from "mongoose";
 import Message from "../models/Message.js";
 import User from "../models/User.js";
+import Conversation from "../models/Conversation.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 
 const router = Router();
@@ -28,6 +29,21 @@ router.get("/:userId", requireAuth, async (req, res) => {
     });
 
     const key = conversationKey(req.user._id, otherUser._id);
+    const conversation = await Conversation.findOne({
+  conversationKey: key,
+});
+
+// Do not allow access to a rejected conversation.
+if (conversation?.status === "rejected") {
+  return res.status(403).json({
+    message: "This message request was rejected.",
+  });
+}
+if (conversation?.status === "blocked") {
+  return res.status(403).json({
+    message: "You cannot send messages in this conversation.",
+  });
+}
     const messages = await Message.find({ 
       conversationKey: key, 
       deletedFor: { $ne: req.user._id }, 
@@ -37,7 +53,7 @@ router.get("/:userId", requireAuth, async (req, res) => {
       .populate("sender", "_id username")
       .populate({
         path: "replyTo",
-        select: "_id text sender",
+        select: "_id text sender attachment isDeleted",
         populate: {
         path: "sender",
         select: "_id username",
@@ -62,10 +78,11 @@ router.get("/:userId", requireAuth, async (req, res) => {
         createdAt: message.createdAt,
         updatedAt: message.updatedAt,
 
-        edited: 
-          Boolean(message.updatedAt &&
-          Boolean(message.updatedAt &&
-          message.updatedAt.getTime() !== message.createdAt.getTime())),
+        edited: Boolean(
+  message.updatedAt &&
+  message.createdAt &&
+  message.updatedAt.getTime() !== message.createdAt.getTime()
+),
 
         isDeleted: Boolean(message.isDeleted),
         deletedBy: message.deletedBy ? String(message.deletedBy) : null,

@@ -32,12 +32,7 @@ const userSchema = new mongoose.Schema(
       enum: ["admin", "member"],
       default: "member",
     },
-
-    canPrivateMessage: {
-      type: Boolean,
-      default: false,
-    },
-
+    
     theme: {
       type: String,
       enum: ["light", "dark"],

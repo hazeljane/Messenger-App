@@ -2,6 +2,7 @@
 import mongoose from "mongoose";
 import Message from "../models/Message.js";
 import User from "../models/User.js";
+import Conversation from "../models/Conversation.js";
 
 function createConversationKey(userA, userB) {
   return [userA.toString(), userB.toString()]
@@ -62,17 +63,14 @@ export function registerPrivateMessageHandlers(io, socket) {
 
       // Check the sender's current permission in MongoDB.
       const sender = await User.findById(userId)
-        .select("_id username role canPrivateMessage");
+        .select("_id username");
 
-      if (
-        !sender ||
-        (sender.role !== "admin" &&
-          sender.canPrivateMessage !== true)
-      ) {
+      if (!sender) 
+       {
         return callback?.({
           ok: false,
           message:
-            "You are not approved to send private messages.",
+            "Sender not found.",
         });
       }
 
@@ -91,7 +89,88 @@ export function registerPrivateMessageHandlers(io, socket) {
         sender._id,
         recipient._id
       );
+let conversation = await Conversation.findOne({
+  conversationKey: key,
+});
 
+if (!conversation) {
+  const existingMessage = await Message.exists({
+    conversationKey: key,
+  });
+
+  try {
+    conversation = await Conversation.create({
+      conversationKey: key,
+      participants: [sender._id, recipient._id],
+      requestedBy: sender._id,
+      status: existingMessage ? "accepted" : "pending",
+      acceptedAt: existingMessage ? new Date() : null,
+    });
+  } catch (error) {
+    if (error.code !== 11000) {
+      throw error;
+    }
+
+    conversation = await Conversation.findOne({
+      conversationKey: key,
+    });
+  }
+}
+
+if (!conversation) {
+  throw new Error("Could not create or load conversation.");
+}
+
+// Blocked conversations cannot receive messages.
+if (conversation.status === "blocked") {
+  return callback?.({
+    ok: false,
+    message: "You cannot send messages in this conversation.",
+  });
+}
+
+// Rejected requests cannot receive messages.
+if (conversation.status === "rejected") {
+  return callback?.({
+    ok: false,
+    message: "This message request was rejected.",
+  });
+}
+
+// Only the original sender can send the initial request message.
+// Allow a retry if the initial message was not successfully saved.
+if (conversation.status === "pending") {
+  const isRequestSender =
+    String(conversation.requestedBy) === String(sender._id);
+
+  if (!isRequestSender) {
+    return callback?.({
+      ok: false,
+      message: "This message request is waiting for the recipient to accept.",
+    });
+  }
+
+  const existingRequestMessage = await Message.exists({
+    conversationKey: key,
+  });
+
+  if (existingRequestMessage) {
+    return callback?.({
+      ok: false,
+      message: "Your message request is waiting for the recipient to accept.",
+    });
+  }
+}
+
+// Accepted conversations can exchange messages normally.
+if (
+  !["pending", "accepted"].includes(conversation.status)
+) {
+  return callback?.({
+    ok: false,
+    message: "This conversation is not available.",
+  });
+}
       // Validate reply belongs to this conversation.
       let originalMessage = null;
 

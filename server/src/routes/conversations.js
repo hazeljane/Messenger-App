@@ -1,8 +1,9 @@
-
 import { Router } from "express";
 import mongoose from "mongoose";
 import User from "../models/User.js";
 import ConversationSettings from "../models/ConversationSettings.js";
+import Conversation from "../models/Conversation.js";
+import Message from "../models/Message.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { conversationKey } from "./messages.js";
 
@@ -20,9 +21,240 @@ const allowedBackgrounds = [
   "night",
   "sky",
 ];
+async function requireAcceptedConversation(userId, currentUserId) {
+  const key = conversationKey(currentUserId, userId);
 
+  return Conversation.findOne({
+    conversationKey: key,
+    participants: currentUserId,
+    status: "accepted",
+  });
+}
+
+// Get incoming private message requests
+router.get("/requests", requireAuth, async (req, res, next) => {
+  try {
+    const requests = await Conversation.find({
+      participants: req.user._id,
+      requestedBy: { $ne: req.user._id },
+      status: "pending",
+    })
+      .populate("requestedBy", "_id username")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const conversationKeys = requests.map(
+      (conversation) => conversation.conversationKey
+    );
+
+    const firstMessages = await Message.find({
+      conversationKey: { $in: conversationKeys },
+    })
+      .sort({ createdAt: 1 })
+      .populate("sender", "_id username")
+      .lean();
+
+    const messageByConversation = new Map();
+
+    for (const message of firstMessages) {
+      if (!messageByConversation.has(message.conversationKey)) {
+        messageByConversation.set(message.conversationKey, message);
+      }
+    }
+
+    return res.json({
+      requests: requests.map((conversation) => {
+        const firstMessage = messageByConversation.get(
+          conversation.conversationKey
+        );
+
+        return {
+          conversationKey: conversation.conversationKey,
+          user: conversation.requestedBy,
+          status: conversation.status,
+          createdAt: conversation.createdAt,
+          message: firstMessage
+            ? {
+                id: firstMessage._id.toString(),
+                text: firstMessage.text || "",
+                attachment: firstMessage.attachment?.url
+                  ? firstMessage.attachment
+                  : null,
+                createdAt: firstMessage.createdAt,
+              }
+            : null,
+        };
+      }),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+// Accept an incoming private message request
+router.post("/:userId/accept", requireAuth, async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    if (
+      !mongoose.isValidObjectId(userId) ||
+      String(userId) === String(req.user._id)
+    ) {
+      return res.status(400).json({
+        message: "Invalid conversation.",
+      });
+    }
+
+    const key = conversationKey(req.user._id, userId);
+
+    const conversation = await Conversation.findOne({
+      conversationKey: key,
+      participants: req.user._id,
+      requestedBy: userId,
+      status: "pending",
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        message: "Pending message request not found.",
+      });
+    }
+
+    conversation.status = "accepted";
+    conversation.acceptedAt = new Date();
+
+    await conversation.save();
+
+    const update = {
+      conversationKey: key,
+      status: "accepted",
+      acceptedAt: conversation.acceptedAt,
+    };
+
+    const io = req.app.get("io");
+
+    io?.to(`user:${req.user._id}`).emit(
+      "conversation:request:accepted",
+      update
+    );
+
+    io?.to(`user:${userId}`).emit(
+      "conversation:request:accepted",
+      update
+    );
+
+    return res.json({
+      message: "Message request accepted.",
+      ...update,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+// Reject an incoming private message request
+router.post("/:userId/reject", requireAuth, async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    if (
+      !mongoose.isValidObjectId(userId) ||
+      String(userId) === String(req.user._id)
+    ) {
+      return res.status(400).json({
+        message: "Invalid conversation.",
+      });
+    }
+
+    const key = conversationKey(req.user._id, userId);
+
+    const conversation = await Conversation.findOne({
+      conversationKey: key,
+      participants: req.user._id,
+      requestedBy: userId,
+      status: "pending",
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        message: "Pending message request not found.",
+      });
+    }
+
+    conversation.status = "rejected";
+    await conversation.save();
+
+    const update = {
+      conversationKey: key,
+      status: "rejected",
+    };
+
+    const io = req.app.get("io");
+
+    io?.to(`user:${req.user._id}`).emit(
+      "conversation:request:rejected",
+      update
+    );
+
+    io?.to(`user:${userId}`).emit(
+      "conversation:request:rejected",
+      update
+    );
+
+    return res.json({
+      message: "Message request rejected.",
+      ...update,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 // Get shared private conversation settings
 router.get("/:userId/settings", requireAuth, async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    if (
+      !mongoose.isValidObjectId(userId) ||
+      String(userId) === String(req.user._id)
+    ) {
+      return res.status(400).json({
+        message: "Invalid conversation.",
+      });
+    }
+
+    const otherUser = await User.findById(userId).select("_id");
+
+    if (!otherUser) {
+      return res.status(404).json({
+        message: "User not found.",
+      });
+    }
+    const conversation = await requireAcceptedConversation(
+  userId,
+  req.user._id
+);
+
+if (!conversation) {
+  return res.status(403).json({
+    message: "You can only access settings for accepted conversations.",
+  });
+}
+    const key = conversationKey(req.user._id, otherUser._id);
+
+    const settings = await ConversationSettings.findOne({
+      conversationKey: key,
+    }).lean();
+
+
+    return res.json({
+      background: settings?.background || "default",
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Block a private conversation
+router.post("/:userId/block", requireAuth, async (req, res, next) => {
   try {
     const { userId } = req.params;
 
@@ -45,18 +277,115 @@ router.get("/:userId/settings", requireAuth, async (req, res, next) => {
 
     const key = conversationKey(req.user._id, otherUser._id);
 
-    const settings = await ConversationSettings.findOne({
+    const conversation = await Conversation.findOne({
       conversationKey: key,
-    }).lean();
+      participants: req.user._id,
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        message: "Conversation not found.",
+      });
+    }
+
+    conversation.status = "blocked";
+    conversation.blockedBy = req.user._id;
+    conversation.blockedAt = new Date();
+
+    await conversation.save();
+
+    const update = {
+      conversationKey: key,
+      status: "blocked",
+      blockedBy: String(req.user._id),
+      blockedAt: conversation.blockedAt,
+    };
+
+    const io = req.app.get("io");
+
+    io?.to(`user:${req.user._id}`).emit(
+      "conversation:blocked",
+      update
+    );
+
+    io?.to(`user:${otherUser._id}`).emit(
+      "conversation:blocked",
+      update
+    );
 
     return res.json({
-      background: settings?.background || "default",
+      message: "Conversation blocked.",
+      ...update,
     });
   } catch (error) {
     next(error);
   }
 });
 
+// Delete an incoming private message request
+router.delete("/:userId/request", requireAuth, async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    if (
+      !mongoose.isValidObjectId(userId) ||
+      String(userId) === String(req.user._id)
+    ) {
+      return res.status(400).json({
+        message: "Invalid conversation.",
+      });
+    }
+
+    const key = conversationKey(req.user._id, userId);
+
+    const conversation = await Conversation.findOne({
+      conversationKey: key,
+      participants: req.user._id,
+      requestedBy: userId,
+      status: "pending",
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        message: "Pending message request not found.",
+      });
+    }
+
+    // Delete messages belonging to this pending request.
+    await Message.deleteMany({
+      conversationKey: key,
+    });
+
+    // Delete the conversation request.
+    await Conversation.deleteOne({
+      _id: conversation._id,
+    });
+
+    const io = req.app.get("io");
+
+    const update = {
+      conversationKey: key,
+      deletedBy: String(req.user._id),
+    };
+
+    io?.to(`user:${req.user._id}`).emit(
+      "conversation:request:deleted",
+      update
+    );
+
+    io?.to(`user:${userId}`).emit(
+      "conversation:request:deleted",
+      update
+    );
+
+    return res.json({
+      message: "Message request deleted.",
+      ...update,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 // Change shared private conversation background
 router.patch("/:userId/settings", requireAuth, async (req, res, next) => {
   try {
@@ -86,8 +415,18 @@ router.patch("/:userId/settings", requireAuth, async (req, res, next) => {
       });
     }
 
-    const key = conversationKey(req.user._id, otherUser._id);
+    const conversation = await requireAcceptedConversation(
+      userId,
+      req.user._id
+    );
 
+    if (!conversation) {
+      return res.status(403).json({
+        message: "You can only update settings for accepted conversations.",
+      });
+    }
+
+    const key = conversationKey(req.user._id, otherUser._id);
 
     const settings = await ConversationSettings.findOneAndUpdate(
       { conversationKey: key },

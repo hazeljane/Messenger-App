@@ -26,7 +26,6 @@ function publicUser(user) {
     username: user.username,
     email: user.email,
     role: user.role || "member",
-    canPrivateMessage: user.canPrivateMessage === true,
     theme: user.theme || "light",
   };
 }
@@ -122,7 +121,7 @@ router.post("/login", async (req, res) => {
     { usernameLower: login },
   ],
 }).select(
-  "+passwordHash username email usernameLower role canPrivateMessage theme"
+  "+passwordHash username email usernameLower role theme"
 );
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {

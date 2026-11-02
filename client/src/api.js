@@ -89,11 +89,36 @@ updateActiveStatus: (showActiveStatus) =>
     }),
 
   // Users and private messages
-  users: (search = "") =>
-    request(`/api/users?search=${encodeURIComponent(search)}`),
+// Users and private messages
+users: (search = "") =>
+  request(`/api/users?search=${encodeURIComponent(search)}`),
 
-  messages: (userId) =>
-    request(`/api/messages/${encodeURIComponent(userId)}`),
+messages: (userId) =>
+  request(`/api/messages/${encodeURIComponent(userId)}`),
+
+// Private message requests
+getMessageRequests: () =>
+  request("/api/conversations/requests"),
+
+acceptMessageRequest: (userId) =>
+  request(`/api/conversations/${encodeURIComponent(userId)}/accept`, {
+    method: "POST",
+  }),
+
+rejectMessageRequest: (userId) =>
+  request(`/api/conversations/${encodeURIComponent(userId)}/reject`, {
+    method: "POST",
+  }),
+
+deleteMessageRequest: (userId) =>
+  request(`/api/conversations/${encodeURIComponent(userId)}/request`, {
+    method: "DELETE",
+  }),
+
+blockConversation: (userId) =>
+  request(`/api/conversations/${encodeURIComponent(userId)}/block`, {
+    method: "POST",
+  }),
 
   // Group chats
   groups: () => request("/api/groups"),
@@ -135,7 +160,9 @@ updateActiveStatus: (showActiveStatus) =>
     return data;
   },
 };
-
+console.log("Loaded API file:", import.meta.url);
+console.log("API methods in api.js:", Object.keys(api));
+console.log("getMessageRequests in api.js:", api.getMessageRequests);
 export function connectSocket() {
   return io(API_URL, {
     withCredentials: true,
