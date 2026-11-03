@@ -1,4 +1,8 @@
 
+/* ================================
+   CALL OVERLAY
+================================ */
+
 .call-overlay {
   position: fixed;
   inset: 0;
@@ -11,6 +15,10 @@
   backdrop-filter: blur(8px);
 }
 
+/* ================================
+   CALL MODAL
+================================ */
+
 .call-modal {
   width: min(100%, 440px);
   overflow: hidden;
@@ -19,6 +27,11 @@
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 24px;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+}
+
+/* Give video calls more space */
+.call-modal:has(.video-call) {
+  width: min(100%, 850px);
 }
 
 .call-modal-header {
@@ -44,7 +57,16 @@
   border: 0;
   border-radius: 50%;
   cursor: pointer;
+  transition: background 0.2s ease;
 }
+
+.call-close-button:hover {
+  background: #e9e1ef;
+}
+
+/* ================================
+   MEDIA AREA
+================================ */
 
 .call-media-area {
   position: relative;
@@ -59,11 +81,19 @@
 }
 
 .call-media-area.video-call {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: min(65vh, 560px);
   min-height: 390px;
   padding: 0;
   overflow: hidden;
   background: #17131d;
 }
+
+/* ================================
+   AVATAR
+================================ */
 
 .call-avatar {
   display: grid;
@@ -74,6 +104,102 @@
   background: linear-gradient(135deg, #a77bea, #7654c9);
   border-radius: 50%;
 }
+
+.remote-avatar {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #fff;
+  background: #24202b;
+  border-radius: 0;
+}
+
+.remote-avatar span {
+  font-size: 13px;
+}
+
+/* ================================
+   REMOTE VIDEO - OTHER PERSON
+================================ */
+
+.remote-video {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #17131d;
+}
+
+/* ================================
+   LOCAL VIDEO - YOUR CAMERA
+================================ */
+
+.local-video-wrapper {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 5;
+  width: 180px;
+  height: 135px;
+  overflow: hidden;
+  background: #30243b;
+  border: 2px solid #fff;
+  border-radius: 14px;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.35);
+}
+
+.local-video {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #30243b;
+  transform: scaleX(-1);
+}
+
+/* Label on your camera preview */
+.local-video-label {
+  position: absolute;
+  bottom: 7px;
+  left: 8px;
+  z-index: 2;
+  padding: 4px 8px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Camera disabled overlay */
+.camera-off-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #fff;
+  background: #29242f;
+  font-size: 12px;
+}
+
+/* ================================
+   PERSON INFORMATION
+================================ */
 
 .call-person-info {
   z-index: 2;
@@ -97,33 +223,25 @@
   right: 16px;
   bottom: 18px;
   left: 16px;
+  z-index: 4;
   color: #fff;
+  text-align: left;
+  pointer-events: none;
+}
+
+.video-call .call-person-info h2 {
+  font-size: 18px;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
 }
 
 .video-call .call-person-info p {
   color: #e4dced;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
 }
 
-.remote-video {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.local-video {
-  position: absolute;
-  right: 16px;
-  top: 16px;
-  z-index: 3;
-  width: 112px;
-  height: 150px;
-  object-fit: cover;
-  background: #30243b;
-  border: 2px solid #fff;
-  border-radius: 14px;
-}
+/* ================================
+   CALL CONTROLS
+================================ */
 
 .call-controls {
   display: flex;
@@ -145,11 +263,18 @@
   border: 0;
   border-radius: 16px;
   cursor: pointer;
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease,
+    background 0.2s ease;
 }
 
 .call-action:hover {
   transform: translateY(-2px);
+}
+
+.call-action:active {
+  transform: scale(0.96);
 }
 
 .call-action svg {
@@ -166,8 +291,16 @@
   background: #25a96a;
 }
 
+.call-action.accept:hover {
+  background: #1e925b;
+}
+
 .call-action.decline {
   background: #e34f61;
+}
+
+.call-action.decline:hover {
+  background: #ca4052;
 }
 
 .call-action.secondary {
@@ -180,6 +313,30 @@
   background: #7560a8;
 }
 
+/* ================================
+   TABLET
+================================ */
+
+@media (max-width: 768px) {
+  .call-modal:has(.video-call) {
+    width: min(100%, 650px);
+  }
+
+  .call-media-area.video-call {
+    height: 55vh;
+    min-height: 350px;
+  }
+
+  .local-video-wrapper {
+    width: 145px;
+    height: 110px;
+  }
+}
+
+/* ================================
+   MOBILE
+================================ */
+
 @media (max-width: 480px) {
   .call-overlay {
     padding: 12px;
@@ -189,12 +346,21 @@
     border-radius: 20px;
   }
 
+  .call-modal:has(.video-call) {
+    width: 100%;
+  }
+
   .call-media-area {
     min-height: 270px;
   }
 
   .call-media-area.video-call {
-    min-height: 55vh;
+    height: 55vh;
+    min-height: 350px;
+  }
+
+  .call-modal-header {
+    padding: 15px 17px;
   }
 
   .call-controls {
@@ -207,8 +373,16 @@
     padding: 10px 8px;
   }
 
-  .local-video {
-    width: 88px;
-    height: 120px;
+  .local-video-wrapper {
+    top: 10px;
+    right: 10px;
+    width: 110px;
+    height: 85px;
+  }
+
+  .video-call .call-person-info {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
   }
 }

@@ -29,15 +29,6 @@ async function requireAcceptedConversation(userId, currentUserId) {
     participants: currentUserId,
   }).lean();
 
-  console.log("Conversation authorization check:", {
-    key,
-    currentUserId: String(currentUserId),
-    userId: String(userId),
-    found: Boolean(conversation),
-    status: conversation?.status,
-    participants: conversation?.participants?.map(String),
-  });
-
   if (!conversation || conversation.status !== "accepted") {
     return null;
   }
@@ -256,6 +247,7 @@ if (!conversation) {
 
     const settings = await ConversationSettings.findOne({
       conversationKey: key,
+      userId: req.user._id,
     }).lean();
 
 
@@ -400,7 +392,8 @@ router.delete("/:userId/request", requireAuth, async (req, res, next) => {
     next(error);
   }
 });
-// Change shared private conversation background
+
+// Change personal private conversation background
 router.patch("/:userId/settings", requireAuth, async (req, res, next) => {
   try {
     const { userId } = req.params;
@@ -421,7 +414,7 @@ router.patch("/:userId/settings", requireAuth, async (req, res, next) => {
       });
     }
 
-    const otherUser = await User.findById(userId).select("_id username");
+    const otherUser = await User.findById(userId).select("_id");
 
     if (!otherUser) {
       return res.status(404).json({
@@ -443,14 +436,17 @@ router.patch("/:userId/settings", requireAuth, async (req, res, next) => {
     const key = conversationKey(req.user._id, otherUser._id);
 
     const settings = await ConversationSettings.findOneAndUpdate(
-      { conversationKey: key },
+      {
+        conversationKey: key,
+        userId: req.user._id,
+      },
       {
         $set: {
           background,
-          updatedBy: req.user._id,
         },
         $setOnInsert: {
           conversationKey: key,
+          userId: req.user._id,
         },
       },
       {
@@ -460,35 +456,28 @@ router.patch("/:userId/settings", requireAuth, async (req, res, next) => {
       }
     );
 
-    const io = req.app.get("io");
-
     const update = {
       conversationKey: key,
       background: settings.background,
-      changedBy: {
-        id: String(req.user._id),
-        username: req.user.username,
-      },
     };
+
+    // Notify only the user who changed their personal background.
+    const io = req.app.get("io");
 
     io?.to(`user:${req.user._id}`).emit(
       "conversation:background:updated",
       update
     );
 
-    io?.to(`user:${otherUser._id}`).emit(
-      "conversation:background:updated",
-      update
-    );
-
     return res.json({
-      message: "Conversation background updated.",
+      message: "Your conversation background was updated.",
       ...update,
     });
   } catch (error) {
     next(error);
   }
 });
+
 
 // Update personal appearance theme
 router.patch("/theme", requireAuth, async (req, res, next) => {

@@ -658,78 +658,15 @@ function handleDeclineIncoming() {
     setIsCameraOff(nextCameraOff);
   }
 
-  // =========================
-  // 24. BACKGROUND PICKER
-  // =========================
 
-  function openBackgroundPicker(chat) {
-    if (!chat) return;
+// =========================
+// 24. BACKGROUND PICKER
+// =========================
 
-    setBackgroundPickerOpen(true);
-  }
+function openBackgroundPicker(chat) {
+  if (!chat) return;
 
-async function handleBackgroundChange(background) {
-  if (!activeChat || savingBackground) return;
-
-  console.log("Active chat:", activeChat);
-  console.log("Active chat user:", activeChat.user);
-  console.log("Active chat ID:", activeChat.id);
-
-  setSavingBackground(true);
-  setError("");
-
-  try {
-    if (activeChat.isGroup) {
-      await api.updateGroupBackground(
-        activeChat.id,
-        background
-      );
-
-      setGroups((previous) =>
-        previous.map((group) =>
-          sameId(group.id, activeChat.id)
-            ? { ...group, background }
-            : group
-        )
-      );
-    } else {
-      const recipientId =
-        activeChat.user?._id ||
-        activeChat.userId ||
-        activeChat.recipientId;
-
-      if (!recipientId) {
-        throw new Error(
-          "Could not find the other user's ID. Check the active chat object."
-        );
-      }
-
-      await api.updateConversationBackground(
-        recipientId,
-        background
-      );
-    }
-
-    setChats((previous) =>
-      previous.map((chat) =>
-        sameId(chat.id, activeChat.id)
-          ? { ...chat, background }
-          : chat
-      )
-    );
-
-    setBackgroundPickerOpen(false);
-    showNotice("Chat background updated.");
-  } catch (err) {
-    console.error("Background update error:", err);
-
-    setError(
-      err.message || "Could not update chat background."
-    );
-  } finally {
-    setSavingBackground(false);
-  }
-
+  setBackgroundPickerOpen(true);
 }
 
 async function handleBackgroundChange(background) {
@@ -740,11 +677,7 @@ async function handleBackgroundChange(background) {
 
   try {
     if (activeChat.isGroup) {
-      // Update group background
-      await api.updateGroupBackground(
-        activeChat.id,
-        background
-      );
+      await api.updateGroupBackground(activeChat.id, background);
 
       setGroups((previous) =>
         previous.map((group) =>
@@ -754,20 +687,15 @@ async function handleBackgroundChange(background) {
         )
       );
     } else {
-      // activeChat.id is the other user's ID
       const recipientId = activeChat.id;
 
       if (!recipientId) {
         throw new Error("Recipient ID is missing.");
       }
 
-      await api.updateConversationBackground(
-        recipientId,
-        background
-      );
+      await api.updateConversationBackground(recipientId, background);
     }
 
-    // Update displayed chat background
     setChats((previous) =>
       previous.map((chat) =>
         sameId(chat.id, activeChat.id)
@@ -780,10 +708,7 @@ async function handleBackgroundChange(background) {
     showNotice("Chat background updated.");
   } catch (err) {
     console.error("Background update error:", err);
-
-    setError(
-      err.message || "Could not update chat background."
-    );
+    setError(err.message || "Could not update chat background.");
   } finally {
     setSavingBackground(false);
   }

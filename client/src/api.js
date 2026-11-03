@@ -1,8 +1,17 @@
+
 import { io } from "socket.io-client";
+
+// =========================
+// API CONFIGURATION
+// =========================
 
 export const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:5000"
 ).replace(/\/$/, "");
+
+// =========================
+// API REQUEST HELPER
+// =========================
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -16,19 +25,25 @@ async function request(path, options = {}) {
 
   const data = await response.json().catch(() => ({}));
 
-if (!response.ok) {
-  console.error("API request failed:", {
-    status: response.status,
-    response: data,
-  });
+  if (!response.ok) {
+    console.error("API request failed:", {
+      url: `${API_URL}${path}`,
+      method: options.method || "GET",
+      status: response.status,
+      response: data,
+    });
 
-  throw new Error(
-    data.message || `Request failed with status ${response.status}`
-  );
-}
+    throw new Error(
+      data.message || `Request failed with status ${response.status}`
+    );
+  }
 
   return data;
 }
+
+// =========================
+// API METHODS
+// =========================
 
 export const api = {
   // Account settings
@@ -37,27 +52,28 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ theme }),
     }),
-updateActiveStatus: (showActiveStatus) =>
-  request("/api/users/active-status", {
-    method: "PATCH",
-    body: JSON.stringify({ showActiveStatus }),
-  }),
+
+  updateActiveStatus: (showActiveStatus) =>
+    request("/api/users/active-status", {
+      method: "PATCH",
+      body: JSON.stringify({ showActiveStatus }),
+    }),
 
   // Private conversation settings
-  getConversationSettings: (conversationId) =>
+  getConversationSettings: (userId) =>
     request(
-      `/api/conversations/${encodeURIComponent(conversationId)}/settings`
+      `/api/conversations/${encodeURIComponent(userId)}/settings`
     ),
 
+  updateConversationBackground: (userId, background) =>
+    request(
+      `/api/conversations/${encodeURIComponent(userId)}/settings`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ background }),
+      }
+    ),
 
-updateConversationBackground: (userId, background) =>
-  request(
-    `/api/conversations/${encodeURIComponent(userId)}/settings`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({ background }),
-    }
-  ),
   // Group conversation settings
   updateGroupBackground: (groupId, background) =>
     request(
@@ -89,36 +105,35 @@ updateConversationBackground: (userId, background) =>
     }),
 
   // Users and private messages
-// Users and private messages
-users: (search = "") =>
-  request(`/api/users?search=${encodeURIComponent(search)}`),
+  users: (search = "") =>
+    request(`/api/users?search=${encodeURIComponent(search)}`),
 
-messages: (userId) =>
-  request(`/api/messages/${encodeURIComponent(userId)}`),
+  messages: (userId) =>
+    request(`/api/messages/${encodeURIComponent(userId)}`),
 
-// Private message requests
-getMessageRequests: () =>
-  request("/api/conversations/requests"),
+  // Private message requests
+  getMessageRequests: () =>
+    request("/api/conversations/requests"),
 
-acceptMessageRequest: (userId) =>
-  request(`/api/conversations/${encodeURIComponent(userId)}/accept`, {
-    method: "POST",
-  }),
+  acceptMessageRequest: (userId) =>
+    request(`/api/conversations/${encodeURIComponent(userId)}/accept`, {
+      method: "POST",
+    }),
 
-rejectMessageRequest: (userId) =>
-  request(`/api/conversations/${encodeURIComponent(userId)}/reject`, {
-    method: "POST",
-  }),
+  rejectMessageRequest: (userId) =>
+    request(`/api/conversations/${encodeURIComponent(userId)}/reject`, {
+      method: "POST",
+    }),
 
-deleteMessageRequest: (userId) =>
-  request(`/api/conversations/${encodeURIComponent(userId)}/request`, {
-    method: "DELETE",
-  }),
+  deleteMessageRequest: (userId) =>
+    request(`/api/conversations/${encodeURIComponent(userId)}/request`, {
+      method: "DELETE",
+    }),
 
-blockConversation: (userId) =>
-  request(`/api/conversations/${encodeURIComponent(userId)}/block`, {
-    method: "POST",
-  }),
+  blockConversation: (userId) =>
+    request(`/api/conversations/${encodeURIComponent(userId)}/block`, {
+      method: "POST",
+    }),
 
   // Group chats
   groups: () => request("/api/groups"),
@@ -160,16 +175,11 @@ blockConversation: (userId) =>
     return data;
   },
 };
-console.log("Loaded API file:", import.meta.url);
-console.log("API methods in api.js:", Object.keys(api));
-console.log("getMessageRequests in api.js:", api.getMessageRequests);
+
 export function connectSocket() {
   const socket = io(API_URL, {
     withCredentials: true,
-
-    // Temporarily use polling first to diagnose the connection.
     transports: ["polling", "websocket"],
-
     reconnection: true,
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
@@ -178,10 +188,10 @@ export function connectSocket() {
   socket.on("connect", () => {
     console.log("Socket.IO connected:", socket.id);
   });
-
-  socket.on("connect_error", (error) => {
-    console.error("Socket.IO connection error:", error.message);
-  });
+socket.on("connect_error", (error) => {
+  console.error("Socket.IO connection error:", error.message);
+  console.error("Error details:", error);
+});
 
   socket.on("disconnect", (reason) => {
     console.log("Socket.IO disconnected:", reason);

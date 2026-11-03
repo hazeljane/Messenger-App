@@ -1,5 +1,10 @@
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 // ============================================
 // 1. WEBRTC CONFIGURATION
@@ -7,12 +12,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const ICE_SERVERS = {
   iceServers: [
-    {
-      urls: "stun:stun.l.google.com:19302",
-    },
-    {
-      urls: "stun:stun1.l.google.com:19302",
-    },
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
   ],
 };
 
@@ -35,17 +36,12 @@ export default function useWebRTC(socket) {
     callId: null,
   });
 
-  // Remote ICE candidates waiting for a peer connection
-  // or remote description.
   const pendingCandidatesRef = useRef([]);
-
-  // Local ICE candidates waiting for a call ID.
   const pendingLocalCandidatesRef = useRef([]);
 
-  // Serialize addIceCandidate operations.
   const candidateQueueRef = useRef(Promise.resolve());
 
-  // Prevent media streams from being kept after a cancelled call.
+  // Identifies the current call and prevents stale operations.
   const callGenerationRef = useRef(0);
 
   // ------------------------------------------
@@ -55,25 +51,40 @@ export default function useWebRTC(socket) {
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
 
-  const [connectionState, setConnectionState] =
-    useState("new");
-
+  const [connectionState, setConnectionState] = useState("idle");
   const [mediaError, setMediaError] = useState("");
 
   // ==========================================
-  // 3. GET LOCAL CAMERA AND MICROPHONE
+  // 3. STOP A STREAM
+  // ==========================================
+
+  const stopStream = useCallback((stream) => {
+    if (!stream) return;
+
+    stream.getTracks().forEach((track) => {
+      track.stop();
+    });
+  }, []);
+
+  // ==========================================
+  // 4. GET LOCAL CAMERA AND MICROPHONE
   // ==========================================
 
   const getLocalMedia = useCallback(async (callType) => {
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error(
-        "Camera and microphone access is not supported by this browser. Use HTTPS or localhost."
+        "Camera and microphone access is not supported. Use HTTPS or localhost."
       );
     }
 
     const isVideo = callType === "video";
 
     try {
+      console.log("Requesting local media:", {
+        callType,
+        videoEnabled: isVideo,
+      });
+
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
         video: isVideo
@@ -89,13 +100,22 @@ export default function useWebRTC(socket) {
       setLocalStream(stream);
       setMediaError("");
 
+      console.log(
+        "Local media tracks:",
+        stream.getTracks().map((track) => ({
+          kind: track.kind,
+          enabled: track.enabled,
+          readyState: track.readyState,
+        }))
+      );
+
       return stream;
     } catch (error) {
       let message = "Unable to access your camera or microphone.";
 
       if (error.name === "NotAllowedError") {
         message =
-          "Camera or microphone permission was denied. Please allow access in your browser settings.";
+          "Camera or microphone permission was denied. Allow access in your browser settings.";
       } else if (error.name === "NotFoundError") {
         message =
           "No camera or microphone was found on this device.";
@@ -104,16 +124,18 @@ export default function useWebRTC(socket) {
           "Your camera or microphone is already being used by another application.";
       } else if (error.name === "OverconstrainedError") {
         message =
-          "The requested camera or microphone settings are not supported.";
+          "The requested camera settings are not supported.";
       }
 
       setMediaError(message);
+      console.error("Local media error:", error);
+
       throw new Error(message);
     }
   }, []);
 
   // ==========================================
-  // 4. ADD REMOTE ICE CANDIDATE
+  // 5. ADD REMOTE ICE CANDIDATE
   // ==========================================
 
   const addCandidate = useCallback((candidate) => {
@@ -123,34 +145,36 @@ export default function useWebRTC(socket) {
       return Promise.resolve();
     }
 
-    // Keep candidate operations in order.
-    candidateQueueRef.current =
-      candidateQueueRef.current
-        .catch(() => {})
-        .then(async () => {
-          const currentPeer = peerRef.current;
+    // Process candidates in order.
+    candidateQueueRef.current = candidateQueueRef.current
+      .catch(() => {})
+      .then(async () => {
+        const currentPeer = peerRef.current;
 
-          if (!currentPeer || !currentPeer.remoteDescription) {
-            return;
-          }
+        if (
+          !currentPeer ||
+          currentPeer !== peer ||
+          !currentPeer.remoteDescription
+        ) {
+          return;
+        }
 
-          try {
-            await currentPeer.addIceCandidate(
-              new RTCIceCandidate(candidate)
-            );
-          } catch (error) {
-            console.error(
-              "Error adding remote ICE candidate:",
-              error
-            );
-          }
-        });
+        try {
+          await currentPeer.addIceCandidate(
+            new RTCIceCandidate(candidate)
+          );
+
+          console.log("Remote ICE candidate added.");
+        } catch (error) {
+          console.error("Error adding remote ICE candidate:", error);
+        }
+      });
 
     return candidateQueueRef.current;
   }, []);
 
   // ==========================================
-  // 5. FLUSH WAITING REMOTE CANDIDATES
+  // 6. FLUSH PENDING REMOTE CANDIDATES
   // ==========================================
 
   const flushPendingCandidates = useCallback(async () => {
@@ -160,25 +184,24 @@ export default function useWebRTC(socket) {
       return;
     }
 
-    const candidates = [
-      ...pendingCandidatesRef.current,
-    ];
+    const candidates = [...pendingCandidatesRef.current];
 
     pendingCandidatesRef.current = [];
 
     for (const candidate of candidates) {
       await addCandidate(candidate);
     }
+
+    await candidateQueueRef.current;
   }, [addCandidate]);
 
   // ==========================================
-  // 6. SEND LOCAL ICE CANDIDATES
+  // 7. SEND LOCAL ICE CANDIDATES
   // ==========================================
 
   const sendLocalCandidate = useCallback(
     (candidate) => {
-      const { recipientId, callId } =
-        callContextRef.current;
+      const { recipientId, callId } = callContextRef.current;
 
       if (!socket || !recipientId || !callId) {
         pendingLocalCandidatesRef.current.push(candidate);
@@ -195,20 +218,17 @@ export default function useWebRTC(socket) {
   );
 
   // ==========================================
-  // 7. SEND WAITING LOCAL CANDIDATES
+  // 8. FLUSH LOCAL ICE CANDIDATES
   // ==========================================
 
   const flushLocalCandidates = useCallback(() => {
-    const { recipientId, callId } =
-      callContextRef.current;
+    const { recipientId, callId } = callContextRef.current;
 
     if (!socket || !recipientId || !callId) {
       return;
     }
 
-    const candidates = [
-      ...pendingLocalCandidatesRef.current,
-    ];
+    const candidates = [...pendingLocalCandidatesRef.current];
 
     pendingLocalCandidatesRef.current = [];
 
@@ -219,14 +239,15 @@ export default function useWebRTC(socket) {
         candidate,
       });
     });
+
+    console.log("Pending local ICE candidates sent:", candidates.length);
   }, [socket]);
 
   // ==========================================
-  // 8. CREATE PEER CONNECTION
+  // 9. CREATE PEER CONNECTION
   // ==========================================
 
   const createPeerConnection = useCallback(() => {
-    // Reuse an existing connection if one exists.
     if (peerRef.current) {
       return peerRef.current;
     }
@@ -236,34 +257,57 @@ export default function useWebRTC(socket) {
     peerRef.current = peer;
 
     // ------------------------------------------
-    // RECEIVE REMOTE MEDIA
+    // RECEIVE REMOTE AUDIO AND VIDEO
     // ------------------------------------------
 
-    peer.ontrack = (event) => {
-      let stream = remoteStreamRef.current;
+peer.ontrack = (event) => {
+  if (peerRef.current !== peer) return;
 
-      if (!stream) {
-        stream = new MediaStream();
-        remoteStreamRef.current = stream;
-      }
+  let stream = remoteStreamRef.current;
 
-      // Add each incoming track only once.
-      const alreadyAdded = stream
-        .getTracks()
-        .some((track) => track.id === event.track.id);
+  // Prefer the stream provided by the browser.
+  if (event.streams?.[0]) {
+    stream = event.streams[0];
+  } else {
+    // Fallback: create a stream and add tracks manually.
+    if (!stream) {
+      stream = new MediaStream();
+    }
 
-      if (!alreadyAdded) {
-        stream.addTrack(event.track);
-      }
+    const alreadyAdded = stream
+      .getTracks()
+      .some((track) => track.id === event.track.id);
 
-      setRemoteStream(stream);
-    };
+    if (!alreadyAdded) {
+      stream.addTrack(event.track);
+    }
+  }
+
+  remoteStreamRef.current = stream;
+  setRemoteStream(stream);
+
+  console.log("Remote track received:", {
+    kind: event.track.kind,
+    readyState: event.track.readyState,
+    enabled: event.track.enabled,
+    streamTracks: stream.getTracks().map((track) => ({
+      kind: track.kind,
+      readyState: track.readyState,
+    })),
+  });
+
+  event.track.onended = () => {
+    console.log("Remote track ended:", event.track.kind);
+  };
+};
 
     // ------------------------------------------
     // SEND LOCAL ICE CANDIDATES
     // ------------------------------------------
 
     peer.onicecandidate = (event) => {
+      if (peerRef.current !== peer) return;
+
       if (event.candidate) {
         sendLocalCandidate(event.candidate.toJSON());
       }
@@ -274,21 +318,11 @@ export default function useWebRTC(socket) {
     // ------------------------------------------
 
     peer.onconnectionstatechange = () => {
-      if (peerRef.current !== peer) {
-        return;
-      }
+      if (peerRef.current !== peer) return;
+
+      console.log("Peer connection state:", peer.connectionState);
 
       setConnectionState(peer.connectionState);
-
-      if (
-        peer.connectionState === "failed" ||
-        peer.connectionState === "closed"
-      ) {
-        console.warn(
-          "WebRTC connection state:",
-          peer.connectionState
-        );
-      }
     };
 
     // ------------------------------------------
@@ -296,36 +330,72 @@ export default function useWebRTC(socket) {
     // ------------------------------------------
 
     peer.oniceconnectionstatechange = () => {
-      if (peerRef.current !== peer) {
-        return;
-      }
+      if (peerRef.current !== peer) return;
 
-      console.log(
-        "ICE connection state:",
-        peer.iceConnectionState
-      );
+      console.log("ICE connection state:", peer.iceConnectionState);
+
+      if (peer.iceConnectionState === "failed") {
+        console.error(
+          "ICE connection failed. A TURN server may be required."
+        );
+      }
+    };
+
+    // ------------------------------------------
+    // ICE GATHERING STATE
+    // ------------------------------------------
+
+    peer.onicegatheringstatechange = () => {
+      if (peerRef.current !== peer) return;
+
+      console.log("ICE gathering state:", peer.iceGatheringState);
+    };
+
+    // ------------------------------------------
+    // ICE CANDIDATE ERRORS
+    // ------------------------------------------
+
+    peer.onicecandidateerror = (event) => {
+      console.error("ICE candidate error:", {
+        url: event.url,
+        errorCode: event.errorCode,
+        errorText: event.errorText,
+      });
     };
 
     return peer;
   }, [sendLocalCandidate]);
 
   // ==========================================
-  // 9. SET CALL ID
+  // 10. ADD LOCAL TRACKS TO PEER
+  // ==========================================
+
+  const addLocalTracks = useCallback((peer, stream) => {
+    stream.getTracks().forEach((track) => {
+      peer.addTrack(track, stream);
+
+      console.log("Local track added:", {
+        kind: track.kind,
+        enabled: track.enabled,
+      });
+    });
+  }, []);
+
+  // ==========================================
+  // 11. SET CALL ID
   // ==========================================
 
   const setCallId = useCallback(
     (callId) => {
       callContextRef.current.callId = callId;
 
-      // The caller may have gathered ICE candidates
-      // before the server returned the call ID.
       flushLocalCandidates();
     },
     [flushLocalCandidates]
   );
 
   // ==========================================
-  // 10. CREATE OFFER
+  // 12. CREATE OFFER - CALLER
   // ==========================================
 
   const createOffer = useCallback(
@@ -342,31 +412,41 @@ export default function useWebRTC(socket) {
         pendingLocalCandidatesRef.current = [];
         candidateQueueRef.current = Promise.resolve();
 
+        remoteStreamRef.current = null;
+        setRemoteStream(null);
+
         setConnectionState("new");
         setMediaError("");
 
-        // Request microphone and optionally camera.
+        // Get the caller's camera and microphone.
         const stream = await getLocalMedia(callType);
 
-        // Stop if the call was cancelled while permission
-        // was being requested.
+        // Check whether the call was cancelled.
         if (generation !== callGenerationRef.current) {
-          stream.getTracks().forEach((track) => track.stop());
+          stopStream(stream);
+
+          if (localStreamRef.current === stream) {
+            localStreamRef.current = null;
+            setLocalStream(null);
+          }
 
           throw new Error("Call was cancelled.");
         }
 
         const peer = createPeerConnection();
 
-        // Add local audio/video tracks.
-        stream.getTracks().forEach((track) => {
-          peer.addTrack(track, stream);
-        });
+        // Add caller's audio and video tracks.
+        addLocalTracks(peer, stream);
 
         // Create the offer.
         const offer = await peer.createOffer();
 
         await peer.setLocalDescription(offer);
+
+        console.log("Video/audio offer created:", {
+          callType,
+          tracks: stream.getTracks().map((track) => track.kind),
+        });
 
         return peer.localDescription;
       } catch (error) {
@@ -379,20 +459,20 @@ export default function useWebRTC(socket) {
         throw error;
       }
     },
-    [getLocalMedia, createPeerConnection]
+    [
+      getLocalMedia,
+      createPeerConnection,
+      addLocalTracks,
+      stopStream,
+    ]
   );
 
   // ==========================================
-  // 11. CREATE ANSWER
+  // 13. CREATE ANSWER - RECEIVER
   // ==========================================
 
   const createAnswer = useCallback(
-    async (
-      callerId,
-      callId,
-      callType = "video",
-      offer
-    ) => {
+    async (callerId, callId, callType = "video", offer) => {
       const generation = callGenerationRef.current;
 
       try {
@@ -401,10 +481,12 @@ export default function useWebRTC(socket) {
           callId,
         };
 
-// Preserve remote ICE candidates received while the call was ringing.
-// Only reset local candidates for the new answer.
-pendingLocalCandidatesRef.current = [];
-candidateQueueRef.current = Promise.resolve();
+        // Preserve remote ICE candidates received while ringing.
+        pendingLocalCandidatesRef.current = [];
+        candidateQueueRef.current = Promise.resolve();
+
+        remoteStreamRef.current = null;
+        setRemoteStream(null);
 
         setConnectionState("new");
         setMediaError("");
@@ -413,37 +495,46 @@ candidateQueueRef.current = Promise.resolve();
           throw new Error("The incoming call offer is missing.");
         }
 
-        // Request local media.
+        // Get the receiver's own camera and microphone.
         const stream = await getLocalMedia(callType);
 
+        // Check whether the call was cancelled.
         if (generation !== callGenerationRef.current) {
-          stream.getTracks().forEach((track) => track.stop());
+          stopStream(stream);
+
+          if (localStreamRef.current === stream) {
+            localStreamRef.current = null;
+            setLocalStream(null);
+          }
 
           throw new Error("Call was cancelled.");
         }
 
         const peer = createPeerConnection();
 
-        // Add local tracks.
-        stream.getTracks().forEach((track) => {
-          peer.addTrack(track, stream);
-        });
+        // Add receiver's audio and video tracks.
+        addLocalTracks(peer, stream);
 
-        // Apply the caller's offer.
+        // Apply caller's offer.
         await peer.setRemoteDescription(
           new RTCSessionDescription(offer)
         );
 
-        // Add candidates that arrived before the offer.
+        // Add remote ICE candidates received before the offer.
         await flushPendingCandidates();
 
-        // Create the answer.
+        // Create answer.
         const answer = await peer.createAnswer();
 
         await peer.setLocalDescription(answer);
 
-        // Send any local candidates gathered so far.
+        // Send local ICE candidates.
         flushLocalCandidates();
+
+        console.log("Video/audio answer created:", {
+          callType,
+          tracks: stream.getTracks().map((track) => track.kind),
+        });
 
         return peer.localDescription;
       } catch (error) {
@@ -459,13 +550,15 @@ candidateQueueRef.current = Promise.resolve();
     [
       getLocalMedia,
       createPeerConnection,
+      addLocalTracks,
       flushPendingCandidates,
       flushLocalCandidates,
+      stopStream,
     ]
   );
 
   // ==========================================
-  // 12. HANDLE REMOTE ANSWER
+  // 14. HANDLE REMOTE ANSWER
   // ==========================================
 
   const handleRemoteAnswer = useCallback(
@@ -474,9 +567,7 @@ candidateQueueRef.current = Promise.resolve();
         const peer = peerRef.current;
 
         if (!peer) {
-          throw new Error(
-            "Peer connection does not exist."
-          );
+          throw new Error("Peer connection does not exist.");
         }
 
         if (!answer) {
@@ -484,9 +575,7 @@ candidateQueueRef.current = Promise.resolve();
         }
 
         if (peer.remoteDescription) {
-          console.warn(
-            "Remote answer has already been applied."
-          );
+          console.warn("Remote answer has already been applied.");
           return;
         }
 
@@ -498,10 +587,7 @@ candidateQueueRef.current = Promise.resolve();
 
         console.log("Remote answer applied successfully.");
       } catch (error) {
-        console.error(
-          "Error handling remote answer:",
-          error
-        );
+        console.error("Error handling remote answer:", error);
 
         setMediaError(error.message);
         throw error;
@@ -511,21 +597,21 @@ candidateQueueRef.current = Promise.resolve();
   );
 
   // ==========================================
-  // 13. HANDLE REMOTE ICE CANDIDATE
+  // 15. HANDLE REMOTE ICE CANDIDATE
   // ==========================================
 
   const handleRemoteCandidate = useCallback(
     async (candidate) => {
-      if (!candidate) {
-        return;
-      }
+      if (!candidate) return;
 
       const peer = peerRef.current;
 
-      // Candidate arrived before the peer connection
-      // or before the remote description was ready.
+      // Save candidates received before the remote description.
       if (!peer || !peer.remoteDescription) {
         pendingCandidatesRef.current.push(candidate);
+
+        console.log("Remote ICE candidate queued.");
+
         return;
       }
 
@@ -535,43 +621,35 @@ candidateQueueRef.current = Promise.resolve();
   );
 
   // ==========================================
-  // 14. CLEAN UP CALL
+  // 16. CLEAN UP CALL
   // ==========================================
 
   const cleanupCall = useCallback(() => {
-    // Invalidate any pending getUserMedia operation.
+    // Invalidate pending media requests and async operations.
     callGenerationRef.current += 1;
 
-    // Close the peer connection.
+    // Close peer connection.
     if (peerRef.current) {
       peerRef.current.ontrack = null;
       peerRef.current.onicecandidate = null;
       peerRef.current.onconnectionstatechange = null;
       peerRef.current.oniceconnectionstatechange = null;
+      peerRef.current.onicegatheringstatechange = null;
+      peerRef.current.onicecandidateerror = null;
 
       peerRef.current.close();
       peerRef.current = null;
     }
 
-    // Stop camera and microphone.
-    if (localStreamRef.current) {
-      localStreamRef.current
-        .getTracks()
-        .forEach((track) => track.stop());
+    // Stop local camera and microphone.
+    stopStream(localStreamRef.current);
+    localStreamRef.current = null;
 
-      localStreamRef.current = null;
-    }
+    // Stop remote media tracks.
+    stopStream(remoteStreamRef.current);
+    remoteStreamRef.current = null;
 
-    // Clear remote media references.
-    if (remoteStreamRef.current) {
-      remoteStreamRef.current
-        .getTracks()
-        .forEach((track) => track.stop());
-
-      remoteStreamRef.current = null;
-    }
-
-    // Clear waiting candidates.
+    // Clear candidate queues.
     pendingCandidatesRef.current = [];
     pendingLocalCandidatesRef.current = [];
 
@@ -583,15 +661,17 @@ candidateQueueRef.current = Promise.resolve();
       callId: null,
     };
 
-    // Reset UI state.
+    // Reset UI.
     setLocalStream(null);
     setRemoteStream(null);
-    setConnectionState("new");
+    setConnectionState("idle");
     setMediaError("");
-  }, []);
+
+    console.log("Call cleaned up.");
+  }, [stopStream]);
 
   // ==========================================
-  // 15. CLEAN UP WHEN COMPONENT UNMOUNTS
+  // 17. CLEAN UP WHEN HOOK UNMOUNTS
   // ==========================================
 
   useEffect(() => {
@@ -601,28 +681,23 @@ candidateQueueRef.current = Promise.resolve();
   }, [cleanupCall]);
 
   // ==========================================
-  // 16. RETURN HOOK VALUES AND FUNCTIONS
+  // 18. RETURN VALUES
   // ==========================================
 
   return {
-    // Media streams
     localStream,
     remoteStream,
 
-    // Connection information
     connectionState,
     mediaError,
 
-    // Call setup
     createOffer,
     createAnswer,
     setCallId,
 
-    // Remote WebRTC events
     handleRemoteAnswer,
     handleRemoteCandidate,
 
-    // Cleanup
     cleanupCall,
   };
 }

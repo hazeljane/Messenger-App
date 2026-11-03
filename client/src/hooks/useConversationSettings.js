@@ -4,56 +4,69 @@ import { api } from "../api.js";
 import { sameId } from "../utils/chatHelpers.js";
 
 export default function useConversationSettings({
+  user,
   activeChat,
   setChats,
 }) {
   useEffect(() => {
+    console.log("CONVERSATION SETTINGS CHECK:", {
+      userId: user?._id || user?.id,
+      activeChatId: activeChat?.id,
+      isGroup: activeChat?.isGroup,
+      status: activeChat?.conversationStatus,
+    });
+
     if (
+      !user ||
       !activeChat ||
       activeChat.isGroup ||
       activeChat.conversationStatus !== "accepted"
     ) {
+      console.log("Background loading skipped.");
       return;
     }
 
     let cancelled = false;
+    const chatId = activeChat.id;
 
-    api.getConversationSettings(activeChat.id)
-      .then(({ background }) => {
+    async function loadConversationSettings() {
+      try {
+        console.log("Loading background for:", chatId);
+
+        const settings = await api.getConversationSettings(chatId);
+
         if (cancelled) return;
 
-        const savedBackground = background || "default";
+        const savedBackground =
+          settings?.background || "default";
+
+        console.log("DATABASE BACKGROUND:", savedBackground);
 
         setChats((previous) =>
-          previous.map((chat) => {
-            if (!sameId(chat.id, activeChat.id)) {
-              return chat;
-            }
-
-            if (chat.background === savedBackground) {
-              return chat;
-            }
-
-            return {
-              ...chat,
-              background: savedBackground,
-            };
-          })
+          previous.map((chat) =>
+            sameId(chat.id, chatId)
+              ? {
+                  ...chat,
+                  background: savedBackground,
+                }
+              : chat
+          )
         );
-      })
-      .catch((err) => {
+      } catch (error) {
         if (!cancelled) {
-          console.error(
-            "Could not load conversation settings:",
-            err
-          );
+          console.error("Could not load conversation settings:", error);
         }
-      });
+      }
+    }
+
+    loadConversationSettings();
 
     return () => {
       cancelled = true;
     };
   }, [
+    user?._id,
+    user?.id,
     activeChat?.id,
     activeChat?.isGroup,
     activeChat?.conversationStatus,

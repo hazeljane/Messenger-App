@@ -27,10 +27,12 @@ export default function CallModal({
   isIncoming = false,
   isOutgoing = false,
 }) {
-const localVideoRef = useRef(null);
-const remoteVideoRef = useRef(null);
-const remoteAudioRef = useRef(null);
-// Display your local video.
+  const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
+  const remoteAudioRef = useRef(null);
+
+  const isVideo = call?.callType === "video";
+
 useEffect(() => {
   const video = localVideoRef.current;
 
@@ -39,14 +41,26 @@ useEffect(() => {
   video.srcObject = localStream || null;
 
   if (localStream) {
+    console.log(
+      "YOUR CAMERA:",
+      localStream.getTracks().map((track) => ({
+        kind: track.kind,
+        enabled: track.enabled,
+        readyState: track.readyState,
+      }))
+    );
+
     video.play().catch((error) => {
       console.warn("Local video playback:", error);
     });
   }
-}, [localStream, isCameraOff]);
 
-// Display the remote video.
-useEffect(() => {
+  return () => {
+    video.srcObject = null;
+  };
+}, [localStream,isVideo]);
+
+ useEffect(() => {
   const video = remoteVideoRef.current;
 
   if (!video) return;
@@ -54,29 +68,45 @@ useEffect(() => {
   video.srcObject = remoteStream || null;
 
   if (remoteStream) {
+    console.log(
+      "OTHER PERSON'S CAMERA:",
+      remoteStream.getTracks().map((track) => ({
+        kind: track.kind,
+        enabled: track.enabled,
+        readyState: track.readyState,
+      }))
+    );
+
     video.play().catch((error) => {
       console.warn("Remote video playback:", error);
     });
   }
-}, [remoteStream]);
 
-// Play remote audio.
-useEffect(() => {
-  const audio = remoteAudioRef.current;
+  return () => {
+    video.srcObject = null;
+  };
+}, [remoteStream, isVideo]);
 
-  if (!audio) return;
+  // Play the other person's audio during voice calls.
+  useEffect(() => {
+    const audio = remoteAudioRef.current;
 
-  audio.srcObject = remoteStream || null;
+    if (!audio) return;
 
-  if (remoteStream) {
-    audio.play().catch((error) => {
-      console.warn("Remote audio playback:", error);
-    });
-  }
-}, [remoteStream]);
+    audio.srcObject = remoteStream || null;
+
+    if (remoteStream) {
+      audio.play().catch((error) => {
+        console.warn("Remote audio playback:", error);
+      });
+    }
+
+    return () => {
+      if (audio) audio.srcObject = null;
+    };
+  }, [remoteStream]);
+
   if (!call) return null;
-
-  const isVideo = call.callType === "video";
 
   return (
     <div className="call-overlay">
@@ -92,48 +122,78 @@ useEffect(() => {
                   : "Voice call"}
           </span>
 
-       <button
-  className="call-close-button"
-  onClick={isIncoming ? onDecline : onEnd}
-  aria-label={isIncoming ? "Decline call" : "End call"}
->
-  <PhoneOff size={18} />
-</button>
+          <button
+            className="call-close-button"
+            onClick={isIncoming ? onDecline : onEnd}
+            aria-label={isIncoming ? "Decline call" : "End call"}
+          >
+            <PhoneOff size={18} />
+          </button>
         </header>
 
-        <div className={`call-media-area ${isVideo ? "video-call" : ""}`}>
-          {!isVideo && (
-  <audio
-    ref={remoteAudioRef}
-    autoPlay
-  />
-)}
-          {isVideo && remoteStream ? (
-            <video
-              ref={remoteVideoRef}
-              className="remote-video"
-              autoPlay
-              playsInline
-              muted={false}
-            />
+        <div
+          className={`call-media-area ${isVideo ? "video-call" : ""}`}
+        >
+          {isVideo ? (
+            <>
+              {/* Other person's camera */}
+              <video
+                ref={remoteVideoRef}
+                className="remote-video"
+                autoPlay
+                muted
+                playsInline
+              />
+
+              {/* Show avatar while waiting for remote video */}
+              {!remoteStream?.getVideoTracks().some(
+                (track) => track.readyState === "live"
+              ) && (
+                <div className="call-avatar remote-avatar">
+                  <UserRound size={48} />
+                  <span>Waiting for their camera...</span>
+                </div>
+              )}
+
+              {/* Your camera preview */}
+              {/* Your camera preview */}
+<div className="local-video-wrapper">
+  {localStream && !isCameraOff ? (
+    <video
+      ref={localVideoRef}
+      className="local-video"
+      autoPlay
+      muted
+      playsInline
+    />
+  ) : (
+    <div className="camera-off-overlay">
+      <UserRound size={24} />
+      <span>
+        {isCameraOff ? "Camera off" : "Camera unavailable"}
+      </span>
+    </div>
+  )}
+
+  <span className="local-video-label">You</span>
+</div>
+            </>
           ) : (
-            <div className="call-avatar">
-              <UserRound size={48} />
-            </div>
-          )}
-         
-          {isVideo && localStream && (
-            <video
-              ref={localVideoRef}
-              className="local-video"
-              autoPlay
-              muted
-              playsInline
-            />
+            <>
+              <audio
+                ref={remoteAudioRef}
+                autoPlay
+              />
+
+              <div className="call-avatar">
+                <UserRound size={48} />
+              </div>
+            </>
           )}
 
           <div className="call-person-info">
             <h2>{call.displayName || "Chatterbox user"}</h2>
+
             <p>
               {mediaError ||
                 (isIncoming
@@ -173,7 +233,9 @@ useEffect(() => {
               {!isOutgoing && (
                 <>
                   <button
-                    className={`call-action secondary ${isMuted ? "active" : ""}`}
+                    className={`call-action secondary ${
+                      isMuted ? "active" : ""
+                    }`}
                     onClick={onToggleMute}
                     aria-label={isMuted ? "Unmute" : "Mute"}
                   >
@@ -183,12 +245,18 @@ useEffect(() => {
 
                   {isVideo && (
                     <button
-                      className={`call-action secondary ${isCameraOff ? "active" : ""}`}
+                      className={`call-action secondary ${
+                        isCameraOff ? "active" : ""
+                      }`}
                       onClick={onToggleCamera}
-                      aria-label={isCameraOff ? "Turn camera on" : "Turn camera off"}
+                      aria-label={
+                        isCameraOff ? "Turn camera on" : "Turn camera off"
+                      }
                     >
                       {isCameraOff ? <VideoOff /> : <Video />}
-                      <span>{isCameraOff ? "Camera on" : "Camera off"}</span>
+                      <span>
+                        {isCameraOff ? "Camera on" : "Camera off"}
+                      </span>
                     </button>
                   )}
                 </>

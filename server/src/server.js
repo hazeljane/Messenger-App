@@ -109,15 +109,17 @@ app.set("io", io);
 configureSocketAuth(io);
 registerSocketHandlers(io);
 
-// Error handler
-app.use((error, _req, res, _next) => {
-  console.error("API error:", error);
+app.use((error, req, res, next) => {
+  console.error("========== API ERROR ==========");
+  console.error("URL:", req.method, req.originalUrl);
+  console.error("MESSAGE:", error.message);
+  console.error("STACK:", error.stack);
+  console.error("===============================");
 
   res.status(500).json({
     message: "An unexpected server error occurred.",
   });
 });
-
 // Start server
 async function start() {
   try {

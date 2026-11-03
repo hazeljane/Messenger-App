@@ -16,4 +16,10 @@ export const config = {
   clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
   cookieSecure: process.env.COOKIE_SECURE === "true",
   cookieSameSite: process.env.COOKIE_SAME_SITE || "lax",
+
+  // LiveKit group calls
+  livekitUrl: process.env.LIVEKIT_URL,
+  livekitApiKey: process.env.LIVEKIT_API_KEY,
+  livekitApiSecret: process.env.LIVEKIT_API_SECRET,
+  maxGroupCallParticipants: 8,
 };
