@@ -358,31 +358,38 @@ const loadMessageRequests = useCallback(async () => {
   useEffect(() => {
     if (!socket) return;
 
-    // Incoming call.
-    function handleIncomingCall(call) {
-      if (activeCall || incomingCall) {
-        socket.emit("call:respond", {
-          callerId: call.callerId,
-          callId: call.callId,
-          accepted: false,
-        });
+function handleIncomingCall(call) {
+  console.log("📞 INCOMING CALL RECEIVED:", call);
 
-        return;
-      }
+  console.log("Current activeCall:", activeCall);
+  console.log("Current incomingCall:", incomingCall);
 
-      const caller = chats.find((chat) =>
-        sameId(chat.id, call.callerId)
-      );
+  if (activeCall || incomingCall) {
+    console.warn("⚠️ Automatically declining because user is busy.");
 
-      setIncomingCall({
-        ...call,
-        displayName:
-          caller?.name ||
-          caller?.username ||
-          "Chatterbox user",
-      });
-    }
+    socket.emit("call:respond", {
+      callerId: call.callerId,
+      callId: call.callId,
+      accepted: false,
+    });
 
+    return;
+  }
+
+  const caller = chats.find((chat) =>
+    sameId(chat.id, call.callerId)
+  );
+
+  console.log("✅ Showing incoming call screen.");
+
+  setIncomingCall({
+    ...call,
+    displayName:
+      caller?.name ||
+      caller?.username ||
+      "Chatterbox user",
+  });
+}
     // Caller receives the response.
     async function handleCallResponse(response) {
       if (
