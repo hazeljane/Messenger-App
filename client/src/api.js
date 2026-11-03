@@ -49,15 +49,15 @@ updateActiveStatus: (showActiveStatus) =>
       `/api/conversations/${encodeURIComponent(conversationId)}/settings`
     ),
 
-  updateConversationBackground: (conversationId, background) =>
-    request(
-      `/api/conversations/${encodeURIComponent(conversationId)}/settings`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({ background }),
-      }
-    ),
 
+updateConversationBackground: (userId, background) =>
+  request(
+    `/api/conversations/${encodeURIComponent(userId)}/settings`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ background }),
+    }
+  ),
   // Group conversation settings
   updateGroupBackground: (groupId, background) =>
     request(

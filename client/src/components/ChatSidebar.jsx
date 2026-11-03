@@ -7,8 +7,8 @@ import {
   Users,
   Bell,
   LogOut,
-  Mail,
 } from "lucide-react";
+
 import "./ChatSidebar.css";
 import Avatar, { initials, colorFor } from "./Avatar.jsx";
 import { getTime, sameId } from "../utils/chatHelpers.js";
@@ -34,8 +34,6 @@ export default function ChatSidebar({
   setError,
   setSelectedMemberIds,
   setGroupName,
-  messageRequestCount,
-  setShowMessageRequests,
 setNewSearch,
 setShowSettings,
 }) {
@@ -163,28 +161,7 @@ setShowSettings,
           Groups
         </button>
       </div>
-       <button
-  type="button"
-  className="message-requests-button"
-  onClick={() => {
-    setShowMessageRequests(true);
-  }}
->
-  <span className="message-requests-icon">
-    <Mail size={18} />
-  </span>
-
-  <span className="message-requests-copy">
-    <strong>Message Requests</strong>
-    <small>Messages from people you haven't accepted</small>
-  </span>
-
-  {messageRequestCount > 0 && (
-    <span className="message-requests-count">
-      {messageRequestCount}
-    </span>
-  )}
-</button>
+      
       <div className="conversation-list">
         <div className="list-label">PEOPLE</div>
 

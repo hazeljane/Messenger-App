@@ -1,3 +1,4 @@
+
 import {
   useCallback,
   useEffect,
@@ -6,7 +7,11 @@ import {
   useState,
 } from "react";
 
-import { MessageCircle, LoaderCircle, Plus } from "lucide-react";
+import {
+  MessageCircle,
+  LoaderCircle,
+  Plus,
+} from "lucide-react";
 
 import AuthScreen from "./components/AuthScreen.jsx";
 import ChatSidebar from "./components/ChatSidebar.jsx";
@@ -20,152 +25,739 @@ import ChatError from "./components/ChatError.jsx";
 import ConversationBody from "./components/ConversationBody.jsx";
 import ReplyPreview from "./components/ReplyPreview.jsx";
 import NotificationToasts from "./components/NotificationToasts.jsx";
+import CallModal from "./components/CallModal.jsx";
+import MessageRequestsModal from "./components/MessageRequestsModal.jsx";
+
 import { api, connectSocket } from "./api.js";
 import { sameId } from "./utils/chatHelpers.js";
-import useMessageActions from "./hooks/useMessageActions";
-import useChatMessages from "./hooks/useChatMessages";
-import useChatSocket from "./hooks/useChatSocket";
-import MessageRequestsModal from "./components/MessageRequestsModal.jsx";
+
+import useMessageActions from "./hooks/useMessageActions.js";
+import useChatMessages from "./hooks/useChatMessages.js";
+import useChatSocket from "./hooks/useChatSocket.js";
+import useWebRTC from "./hooks/useWebRTC.js";
+import useConversationSettings from "./hooks/useConversationSettings.js";
+import useMessageSocketEvents from "./hooks/useMessageSocketEvents.js";
+
 export default function App() {
-  console.log("API object:", api);
-console.log("API methods:", Object.keys(api));
-console.log("getMessageRequests:", api.getMessageRequests);
+  // =========================
+  // 1. USER AND CHAT STATE
+  // =========================
+
   const [user, setUser] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
+
   const [chats, setChats] = useState([]);
   const [activeId, setActiveId] = useState("");
   const [search, setSearch] = useState("");
 
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
-  // Private message requests
+
+  // =========================
+  // 2. MESSAGE REQUEST STATE
+  // =========================
+
   const [newSearch, setNewSearch] = useState("");
   const [searchResults, setSearchResults] = useState([]);
-  const [toast, setToast] = useState("");
-  const [showActiveStatus, setShowActiveStatus] = useState(true);
-  const [savingActiveStatus, setSavingActiveStatus] = useState(false);
-  const [error, setError] = useState("");
+
   const [messageRequests, setMessageRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
-  const [loadingMessages, setLoadingMessages] = useState(false);
   const [showMessageRequests, setShowMessageRequests] = useState(false);
+
+  // =========================
+  // 3. NOTIFICATION STATE
+  // =========================
+
+  const [toast, setToast] = useState("");
+  const [mentionToast, setMentionToast] = useState(null);
+  const [mentionSuccessToast, setMentionSuccessToast] = useState("");
+
+  const [error, setError] = useState("");
+
+  // =========================
+  // 4. CHAT AND SOCKET STATE
+  // =========================
+
   const [onlineIds, setOnlineIds] = useState(() => new Set());
-  const [menuOpen, setMenuOpen] = useState(false);
   const [socketStatus, setSocketStatus] = useState("connecting");
+
+  const [socket, setSocket] = useState(null);
+
   const [chatFilter, setChatFilter] = useState("all");
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // =========================
+  // 5. GROUP STATE
+  // =========================
+
   const [groups, setGroups] = useState([]);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+
   const [groupName, setGroupName] = useState("");
   const [selectedMemberIds, setSelectedMemberIds] = useState([]);
   const [savingGroup, setSavingGroup] = useState(false);
-const [socket, setSocket] = useState(null);
-const [mentionToast, setMentionToast] = useState(null);
-const [draft, setDraft] = useState("");
-const [replyTo, setReplyTo] = useState(null);
-const [editDraft, setEditDraft] = useState("");
-const [editingMessageId, setEditingMessageId] = useState("");
-const [savingEdit, setSavingEdit] = useState(false);
+
+  // =========================
+  // 6. MESSAGE COMPOSER STATE
+  // =========================
+
+  const [draft, setDraft] = useState("");
+  const [replyTo, setReplyTo] = useState(null);
+
+  const [editDraft, setEditDraft] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // =========================
+  // 7. LOADING STATE
+  // =========================
+
+  const [loadingMessages, setLoadingMessages] = useState(false);
+
+  // =========================
+  // 8. SETTINGS STATE
+  // =========================
+
+  const [showSettings, setShowSettings] = useState(false);
+
+  const [theme, setTheme] = useState("light");
+  const [savingTheme, setSavingTheme] = useState(false);
+
+  const [showActiveStatus, setShowActiveStatus] = useState(true);
+  const [savingActiveStatus, setSavingActiveStatus] = useState(false);
+
+  const [backgroundPickerOpen, setBackgroundPickerOpen] = useState(false);
+  const [savingBackground, setSavingBackground] = useState(false);
+
+  // =========================
+  // 9. CALL STATE
+  // =========================
+
+  const [activeCall, setActiveCall] = useState(null);
+  const [incomingCall, setIncomingCall] = useState(null);
+
+  const [callStatus, setCallStatus] = useState("");
+  const [isMuted, setIsMuted] = useState(false);
+  const [isCameraOff, setIsCameraOff] = useState(false);
+
+  // =========================
+  // 10. REFS
+  // =========================
+
   const bottomRef = useRef(null);
   const toastTimer = useRef(null);
+
   const activeIdRef = useRef(activeId);
   const inputRef = useRef(null);
   const socketRef = useRef(null);
-const [mentionSuccessToast, setMentionSuccessToast] = useState("");
-const [showSettings, setShowSettings] = useState(false);
-const [backgroundPickerOpen, setBackgroundPickerOpen] = useState(false);
-const [theme, setTheme] = useState("light");
-const [savingTheme, setSavingTheme] = useState(false);
-const [savingBackground, setSavingBackground] = useState(false);
-  const activeChat = chats.find((chat) => sameId(chat.id, activeId));
-  
-const showNotice = useCallback((message) => {
-  setToast(message);
 
-  if (toastTimer.current) {
-    window.clearTimeout(toastTimer.current);
-  }
+  // =========================
+  // 11. ACTIVE CHAT
+  // =========================
 
-  toastTimer.current = window.setTimeout(() => setToast(""), 2800);
-}, []);
+  const activeChat = chats.find((chat) =>
+    sameId(chat.id, activeId)
+  );
+
+  // =========================
+  // 12. CUSTOM HOOKS
+  // =========================
+
+  useConversationSettings({
+    activeChat,
+    setChats,
+  });
+
+  useMessageSocketEvents({
+    socket,
+    user,
+    setChats,
+  });
+
+  const {
+    localStream,
+    remoteStream,
+    connectionState,
+    mediaError,
+    createOffer,
+    createAnswer,
+    handleRemoteAnswer,
+    handleRemoteCandidate,
+    cleanupCall,
+    setCallId,
+  } = useWebRTC(socket);
+
+  // =========================
+  // 13. NOTIFICATION HANDLER
+  // =========================
+
+  const showNotice = useCallback((message) => {
+    setToast(message);
+
+    if (toastTimer.current) {
+      window.clearTimeout(toastTimer.current);
+    }
+
+    toastTimer.current = window.setTimeout(() => {
+      setToast("");
+    }, 2800);
+  }, []);
+
+  // =========================
+  // 14. MESSAGE REQUESTS
+  // =========================
+
 const loadMessageRequests = useCallback(async () => {
   if (!user) return;
 
   setLoadingRequests(true);
 
   try {
-    const { requests } = await api.getMessageRequests();
-    setMessageRequests(requests || []);
+    const response = await api.getMessageRequests();
+
+    console.log("Message requests response:", response);
+    console.log("Requests:", response?.requests);
+
+    const requests = response?.requests || [];
+
+    setMessageRequests(requests);
   } catch (err) {
     console.error("Could not load message requests:", err);
   } finally {
     setLoadingRequests(false);
   }
 }, [user]);
-// Reload requests whenever the recipient opens the modal.
-useEffect(() => {
-  if (!user || !showMessageRequests) return;
 
-  loadMessageRequests();
-}, [user, showMessageRequests, loadMessageRequests]);
-function handleAcceptedRequest(userId) {
-  const requestedUser = chats.find((chat) =>
-    sameId(chat.id, userId)
-  );
+  // Load requests when the user opens the requests modal.
+  useEffect(() => {
+    if (!user || !showMessageRequests) return;
 
-  if (requestedUser) {
-    selectChat({
-      ...requestedUser,
-      conversationStatus: "accepted",
-    });
+    loadMessageRequests();
+  }, [user, showMessageRequests, loadMessageRequests]);
+
+  // Load requests when the user logs in.
+  useEffect(() => {
+    if (!user) {
+      setMessageRequests([]);
+      return;
+    }
+
+    loadMessageRequests();
+  }, [user, loadMessageRequests]);
+
+  // Refresh requests when a new private message arrives.
+  useEffect(() => {
+    if (!socket) return;
+
+    function handleNewMessage() {
+      loadMessageRequests();
+    }
+
+    socket.on("message:new", handleNewMessage);
+
+    return () => {
+      socket.off("message:new", handleNewMessage);
+    };
+  }, [socket, loadMessageRequests]);
+
+  function handleAcceptedRequest(userId) {
+    const requestedUser = chats.find((chat) =>
+      sameId(chat.id, userId)
+    );
+
+    if (requestedUser) {
+      selectChat({
+        ...requestedUser,
+        conversationStatus: "accepted",
+      });
+    }
+
+    loadMessageRequests();
   }
 
-  loadMessageRequests();
-}
+  // =========================
+  // 15. MESSAGE ACTIONS HOOK
+  // =========================
+
   const {
-  sendMessage,
-  handleReply,
-  handleDeleteMessage,
-  startEditing,
-  cancelEditing,
-  saveEditedMessage,
-  removeImage,
-} = useMessageActions({
-  activeChat,
-  draft,
-  setDraft,
-  replyTo,
-  setReplyTo,
-  inputRef,
-  socketRef,
-  showNotice,
-  setError,
-  setMentionSuccessToast,
-  editDraft,
-  setEditDraft,
-  setEditingMessageId,
-  setSavingEdit,
-  savingEdit,
-});
+    sendMessage,
+    handleReply,
+    handleDeleteMessage,
+    startEditing,
+    cancelEditing,
+    saveEditedMessage,
+    removeImage,
+  } = useMessageActions({
+    activeChat,
+    draft,
+    setDraft,
+    replyTo,
+    setReplyTo,
+    inputRef,
+    socketRef,
+    showNotice,
+    setError,
+    setMentionSuccessToast,
+    editDraft,
+    setEditDraft,
+    setEditingMessageId,
+    setSavingEdit,
+    savingEdit,
+  });
 
-useChatMessages({
-  socket,
-  user,
-  activeIdRef,
-  setChats,
-  setOnlineIds,
-});
+  // =========================
+  // 16. CHAT MESSAGES HOOK
+  // =========================
 
-useChatSocket({
-  socket,
-  setSocketStatus,
-  setError,
-  setMentionToast,
-});
+  useChatMessages({
+    socket,
+    user,
+    activeIdRef,
+    setChats,
+    setOnlineIds,
+  });
 
-function openBackgroundPicker(chat) {
-  if (!chat) return;
+  // =========================
+  // 17. CHAT SOCKET HOOK
+  // =========================
 
-  setBackgroundPickerOpen(true);
+  useChatSocket({
+    socket,
+    setSocketStatus,
+    setError,
+    setMentionToast,
+  });
+
+  // =========================
+  // 18. END CALL HANDLER
+  // =========================
+
+  const handleEndCall = useCallback(() => {
+    if (!activeCall) return;
+
+    if (socketRef.current) {
+      socketRef.current.emit("call:end", {
+        recipientId: activeCall.recipientId,
+        callId: activeCall.callId,
+      });
+    }
+
+    cleanupCall();
+
+    setActiveCall(null);
+    setIncomingCall(null);
+    setCallStatus("");
+    setIsMuted(false);
+    setIsCameraOff(false);
+  }, [activeCall, cleanupCall]);
+
+  // =========================
+  // 19. CALL SOCKET EVENTS
+  // =========================
+
+  useEffect(() => {
+    if (!socket) return;
+
+    // Incoming call.
+    function handleIncomingCall(call) {
+      if (activeCall || incomingCall) {
+        socket.emit("call:respond", {
+          callerId: call.callerId,
+          callId: call.callId,
+          accepted: false,
+        });
+
+        return;
+      }
+
+      const caller = chats.find((chat) =>
+        sameId(chat.id, call.callerId)
+      );
+
+      setIncomingCall({
+        ...call,
+        displayName:
+          caller?.name ||
+          caller?.username ||
+          "Chatterbox user",
+      });
+    }
+
+    // Caller receives the response.
+    async function handleCallResponse(response) {
+      if (
+        !activeCall ||
+        response.callId !== activeCall.callId
+      ) {
+        return;
+      }
+
+      if (!response.accepted) {
+        cleanupCall();
+
+        setActiveCall(null);
+        setCallStatus("");
+        setIsMuted(false);
+        setIsCameraOff(false);
+
+        showNotice("The user declined your call.");
+        return;
+      }
+
+      try {
+        await handleRemoteAnswer(response.answer);
+
+        setActiveCall((previous) =>
+          previous
+            ? { ...previous, status: "Connected" }
+            : null
+        );
+
+        setCallStatus("Connected");
+      } catch (err) {
+        console.error("Could not establish call:", err);
+        handleEndCall();
+      }
+    }
+
+    // Receive ICE candidates.
+    async function handleIncomingCandidate(data) {
+      const currentCallId =
+        activeCall?.callId || incomingCall?.callId;
+
+      if (data.callId !== currentCallId) return;
+
+      try {
+        await handleRemoteCandidate(data.candidate);
+      } catch (err) {
+        console.error(
+          "Could not process ICE candidate:",
+          err
+        );
+      }
+    }
+
+    // Call ended.
+function handleCallEnded(data) {
+  if (!data?.callId) return;
+
+  const currentCallId =
+    activeCall?.callId || incomingCall?.callId;
+
+  if (data.callId !== currentCallId) return;
+
+  cleanupCall();
+
+  setActiveCall(null);
+  setIncomingCall(null);
+  setCallStatus("");
+  setIsMuted(false);
+  setIsCameraOff(false);
+
+  showNotice("The call has ended.");
+}
+
+    socket.on("call:incoming", handleIncomingCall);
+    socket.on("call:response", handleCallResponse);
+    socket.on("call:ice-candidate", handleIncomingCandidate);
+    socket.on("call:ended", handleCallEnded);
+
+    return () => {
+      socket.off("call:incoming", handleIncomingCall);
+      socket.off("call:response", handleCallResponse);
+      socket.off("call:ice-candidate", handleIncomingCandidate);
+      socket.off("call:ended", handleCallEnded);
+    };
+  }, [
+    socket,
+    activeCall,
+    incomingCall,
+    chats,
+    handleRemoteAnswer,
+    handleRemoteCandidate,
+    cleanupCall,
+    handleEndCall,
+    showNotice,
+  ]);
+
+  // =========================
+  // 20. START CALL
+  // =========================
+
+  async function handleStartCall(chat, callType) {
+    if (!socketRef.current) {
+      showNotice("Connection is not ready. Please try again.");
+      return;
+    }
+
+    if (!chat || chat.isGroup) {
+      showNotice("Calls are only available in private conversations.");
+      return;
+    }
+
+    if (chat.conversationStatus !== "accepted") {
+      showNotice("Accept the message request before calling.");
+      return;
+    }
+
+    if (!onlineIds.has(String(chat.id))) {
+      showNotice("This user is currently offline.");
+      return;
+    }
+
+    if (activeCall || incomingCall) {
+      showNotice("You already have an active call.");
+      return;
+    }
+
+    try {
+      setCallStatus("Calling...");
+
+      const offer = await createOffer(chat.id, callType);
+
+      socketRef.current.emit(
+        "call:start",
+        {
+          recipientId: chat.id,
+          callType,
+          offer,
+        },
+        async (response) => {
+          if (!response?.ok) {
+            cleanupCall();
+            setCallStatus("");
+
+            showNotice(
+              response?.message || "Could not start the call."
+            );
+
+            return;
+          }
+
+          setCallId(response.callId);
+
+          setActiveCall({
+            callId: response.callId,
+            recipientId: chat.id,
+            callType,
+            displayName:
+              chat.name || chat.username || "Chatterbox user",
+            status: "Calling...",
+          });
+
+          setCallStatus("Calling...");
+        }
+      );
+    } catch (err) {
+      console.error("Could not start call:", err);
+
+      cleanupCall();
+      setCallStatus("");
+
+      showNotice(
+        err.message || "Could not access your microphone or camera."
+      );
+    }
+  }
+// =========================
+// 21. ACCEPT INCOMING CALL
+// =========================
+
+async function handleAcceptIncoming() {
+  if (!incomingCall || !socketRef.current) return;
+
+  // Keep a stable reference while the async operation runs.
+  const call = incomingCall;
+
+  try {
+    setCallStatus("Connecting...");
+
+    // 1. Create the WebRTC answer.
+    const answer = await createAnswer(
+      call.callerId,
+      call.callId,
+      call.callType,
+      call.offer
+    );
+
+    // 2. Tell the server that the call was accepted.
+    socketRef.current.emit(
+      "call:respond",
+      {
+        callerId: call.callerId,
+        callId: call.callId,
+        accepted: true,
+        answer,
+      },
+      (response) => {
+        if (!response?.ok) {
+          cleanupCall();
+
+          setIncomingCall(null);
+          setActiveCall(null);
+          setCallStatus("");
+
+          showNotice(
+            response?.message || "Could not accept the call."
+          );
+
+          return;
+        }
+
+        // 3. Save the active call.
+        setActiveCall({
+          callId: call.callId,
+          recipientId: call.callerId,
+          callType: call.callType,
+          displayName:
+            call.displayName || "Chatterbox user",
+          status: "Connected",
+        });
+
+        setIncomingCall(null);
+        setCallStatus("Connected");
+      }
+    );
+  } catch (err) {
+    console.error("Could not accept call:", err);
+
+    cleanupCall();
+
+    setIncomingCall(null);
+    setActiveCall(null);
+    setCallStatus("");
+
+    showNotice(
+      err.message || "Could not accept the call."
+    );
+  }
+}
+// =========================
+// 22. DECLINE INCOMING CALL
+// =========================
+
+function handleDeclineIncoming() {
+  if (!incomingCall || !socketRef.current) return;
+
+  const call = incomingCall;
+
+  // Notify the caller.
+  socketRef.current.emit("call:respond", {
+    callerId: call.callerId,
+    callId: call.callId,
+    accepted: false,
+  });
+
+  // Clean up local WebRTC resources.
+  cleanupCall();
+
+  // Reset call states.
+  setIncomingCall(null);
+  setActiveCall(null);
+  setCallStatus("");
+  setIsMuted(false);
+  setIsCameraOff(false);
+}
+  // =========================
+  // 23. MUTE AND CAMERA
+  // =========================
+
+  function handleToggleMute() {
+    if (!localStream) return;
+
+    const nextMuted = !isMuted;
+
+    localStream.getAudioTracks().forEach((track) => {
+      track.enabled = !nextMuted;
+    });
+
+    setIsMuted(nextMuted);
+  }
+
+  function handleToggleCamera() {
+    if (!localStream) return;
+
+    const nextCameraOff = !isCameraOff;
+
+    localStream.getVideoTracks().forEach((track) => {
+      track.enabled = !nextCameraOff;
+    });
+
+    setIsCameraOff(nextCameraOff);
+  }
+
+  // =========================
+  // 24. BACKGROUND PICKER
+  // =========================
+
+  function openBackgroundPicker(chat) {
+    if (!chat) return;
+
+    setBackgroundPickerOpen(true);
+  }
+
+async function handleBackgroundChange(background) {
+  if (!activeChat || savingBackground) return;
+
+  console.log("Active chat:", activeChat);
+  console.log("Active chat user:", activeChat.user);
+  console.log("Active chat ID:", activeChat.id);
+
+  setSavingBackground(true);
+  setError("");
+
+  try {
+    if (activeChat.isGroup) {
+      await api.updateGroupBackground(
+        activeChat.id,
+        background
+      );
+
+      setGroups((previous) =>
+        previous.map((group) =>
+          sameId(group.id, activeChat.id)
+            ? { ...group, background }
+            : group
+        )
+      );
+    } else {
+      const recipientId =
+        activeChat.user?._id ||
+        activeChat.userId ||
+        activeChat.recipientId;
+
+      if (!recipientId) {
+        throw new Error(
+          "Could not find the other user's ID. Check the active chat object."
+        );
+      }
+
+      await api.updateConversationBackground(
+        recipientId,
+        background
+      );
+    }
+
+    setChats((previous) =>
+      previous.map((chat) =>
+        sameId(chat.id, activeChat.id)
+          ? { ...chat, background }
+          : chat
+      )
+    );
+
+    setBackgroundPickerOpen(false);
+    showNotice("Chat background updated.");
+  } catch (err) {
+    console.error("Background update error:", err);
+
+    setError(
+      err.message || "Could not update chat background."
+    );
+  } finally {
+    setSavingBackground(false);
+  }
+
 }
 
 async function handleBackgroundChange(background) {
@@ -174,193 +766,93 @@ async function handleBackgroundChange(background) {
   setSavingBackground(true);
   setError("");
 
-try {
-  if (activeChat.isGroup) {
-    await api.updateGroupBackground(activeChat.id, background);
+  try {
+    if (activeChat.isGroup) {
+      // Update group background
+      await api.updateGroupBackground(
+        activeChat.id,
+        background
+      );
 
-    // Update the groups list.
-    setGroups((previous) =>
-      previous.map((group) =>
-        sameId(group.id, activeChat.id)
-          ? { ...group, background }
-          : group
+      setGroups((previous) =>
+        previous.map((group) =>
+          sameId(group.id, activeChat.id)
+            ? { ...group, background }
+            : group
+        )
+      );
+    } else {
+      // activeChat.id is the other user's ID
+      const recipientId = activeChat.id;
+
+      if (!recipientId) {
+        throw new Error("Recipient ID is missing.");
+      }
+
+      await api.updateConversationBackground(
+        recipientId,
+        background
+      );
+    }
+
+    // Update displayed chat background
+    setChats((previous) =>
+      previous.map((chat) =>
+        sameId(chat.id, activeChat.id)
+          ? { ...chat, background }
+          : chat
       )
     );
-  } else {
-    await api.updateConversationBackground(activeChat.id, background);
-  }
-
-  // Update the current user's chat list.
-  setChats((previous) =>
-    previous.map((chat) =>
-      sameId(chat.id, activeChat.id)
-        ? { ...chat, background }
-        : chat
-    )
-  );
 
     setBackgroundPickerOpen(false);
     showNotice("Chat background updated.");
   } catch (err) {
-    setError(err.message || "Could not update chat background.");
+    console.error("Background update error:", err);
+
+    setError(
+      err.message || "Could not update chat background."
+    );
   } finally {
     setSavingBackground(false);
   }
 }
-async function handleActiveStatusChange(nextValue) {
-  if (savingActiveStatus) return;
 
-  setSavingActiveStatus(true);
-
-  try {
-    const data = await api.updateActiveStatus(nextValue);
-
-    setShowActiveStatus(data.showActiveStatus);
-  } catch (error) {
-    console.error("Active Status update failed:", error);
-    alert(error.message);
-  } finally {
-    setSavingActiveStatus(false);
-  }
-}
-// Update group messages when an attachment is removed.
 useEffect(() => {
-  if (!socket) return;
+  if (!user) return;
 
-  function handleAttachmentRemoved(updatedMessage) {
-    setChats((previousChats) =>
-      previousChats.map((chat) => {
-        if (
-          !chat.isGroup ||
-          !sameId(chat.id, updatedMessage.groupId)
-        ) {
-          return chat;
-        }
+  setShowActiveStatus(user.showActiveStatus ?? true);
+}, [user]);
+  // =========================
+  // 25. ACTIVE STATUS
+  // =========================
 
-        const messages = chat.messages || [];
+  async function handleActiveStatusChange(nextValue) {
+    if (savingActiveStatus) return;
 
-        // If the message contained only an image, remove
-        // the entire message from the conversation.
-        if (updatedMessage.deleted) {
-          return {
-            ...chat,
-            messages: messages.filter(
-              (message) =>
-                !sameId(message.id, updatedMessage.id)
-            ),
-          };
-        }
+    setSavingActiveStatus(true);
 
-        // If the message also contained text, preserve
-        // the text and remove only the attachment.
-        return {
-          ...chat,
-          messages: messages.map((message) =>
-            sameId(message.id, updatedMessage.id)
-              ? { ...message, attachment: null }
-              : message
-          ),
-        };
-      })
-    );
+    try {
+      const data = await api.updateActiveStatus(nextValue);
+
+      setShowActiveStatus(data.showActiveStatus);
+    } catch (error) {
+      console.error("Active Status update failed:", error);
+      alert(error.message);
+    } finally {
+      setSavingActiveStatus(false);
+    }
   }
 
-  socket.on(
-    "group:message:attachment-removed",
-    handleAttachmentRemoved
-  );
+  // =========================
+  // 26. FILTERED CHATS
+  // =========================
 
-  return () => {
-    socket.off(
-      "group:message:attachment-removed",
-      handleAttachmentRemoved
-    );
-  };
-}, [socket]);
-// Handle private and group message deletion updates.
-useEffect(() => {
-  if (!socket || !user) return;
-
-  const currentUserId = user.id ?? user._id ?? user.userId;
-
-  function updateDeletedMessage(updatedMessage, isGroupMessage) {
-    setChats((previousChats) =>
-      previousChats.map((chat) => {
-        if (
-          isGroupMessage &&
-          (!chat.isGroup ||
-            !sameId(chat.id, updatedMessage.groupId))
-        ) {
-          return chat;
-        }
-
-        if (!isGroupMessage && chat.isGroup) {
-          return chat;
-        }
-
-        const messages = chat.messages || [];
-
-        // Delete only from this user's view.
-        if (updatedMessage.deleteType === "deleteForYou") {
-          if (!sameId(updatedMessage.deletedFor, currentUserId)) {
-            return chat;
-          }
-
-          return {
-            ...chat,
-            messages: messages.filter(
-              (message) =>
-                !sameId(message.id ?? message._id, updatedMessage.id)
-            ),
-          };
-        }
-
-        // Keep the message, but replace its content with a placeholder.
-        if (updatedMessage.isDeleted) {
-          return {
-            ...chat,
-            messages: messages.map((message) =>
-              sameId(message.id ?? message._id, updatedMessage.id)
-                ? {
-                    ...message,
-                    text: "",
-                    attachment: null,
-                    isDeleted: true,
-                    deletedBy: updatedMessage.deletedBy,
-                    deletedAt: updatedMessage.deletedAt,
-                    replyTo: null,
-                  }
-                : message
-            ),
-          };
-        }
-
-        return chat;
-      })
-    );
-  }
-
-  function handlePrivateMessageDeleted(message) {
-    updateDeletedMessage(message, false);
-  }
-
-  function handleGroupMessageDeleted(message) {
-    updateDeletedMessage(message, true);
-  }
-
-  socket.on("message:deleted", handlePrivateMessageDeleted);
-  socket.on("group:message:deleted", handleGroupMessageDeleted);
-
-  return () => {
-    socket.off("message:deleted", handlePrivateMessageDeleted);
-    socket.off("group:message:deleted", handleGroupMessageDeleted);
-  };
-}, [socket, user]);
   const filteredChats = useMemo(() => {
     const term = search.trim().toLowerCase();
 
     return chats.filter((chat) => {
       const name = chat.name || chat.username || "";
+
       const matchesSearch =
         !term ||
         name.toLowerCase().includes(term) ||
@@ -375,69 +867,117 @@ useEffect(() => {
     });
   }, [chats, search, chatFilter]);
 
+  // =========================
+  // 27. ACTIVE CHAT REF
+  // =========================
+
   useEffect(() => {
     activeIdRef.current = activeId;
   }, [activeId]);
-useEffect(() => {
-  if (!user) return;
 
-  const savedTheme = user.theme === "dark" ? "dark" : "light";
+  // =========================
+  // 28. LOAD USER THEME
+  // =========================
 
-  setTheme(savedTheme);
-  document.documentElement.setAttribute("data-theme", savedTheme);
-}, [user]);
-async function handleThemeChange(nextTheme) {
-  if (!["light", "dark"].includes(nextTheme)) return;
-  if (savingTheme || nextTheme === theme) return;
+  useEffect(() => {
+    if (!user) return;
 
-  setSavingTheme(true);
-  setError("");
-
-  try {
-    const result = await api.updateTheme(nextTheme);
-    const savedTheme = result.theme || nextTheme;
+    const savedTheme =
+      user.theme === "dark" ? "dark" : "light";
 
     setTheme(savedTheme);
-    setUser((previous) =>
-      previous ? { ...previous, theme: savedTheme } : previous
-    );
 
-    document.documentElement.setAttribute("data-theme", savedTheme);
-    showNotice("Appearance updated.");
-  } catch (err) {
-    setError(err.message || "Could not update appearance.");
-  } finally {
-    setSavingTheme(false);
+    document.documentElement.setAttribute(
+      "data-theme",
+      savedTheme
+    );
+  }, [user]);
+
+  // =========================
+  // 29. UPDATE THEME
+  // =========================
+
+  async function handleThemeChange(nextTheme) {
+    if (!["light", "dark"].includes(nextTheme)) return;
+    if (savingTheme || nextTheme === theme) return;
+
+    setSavingTheme(true);
+    setError("");
+
+    try {
+      const result = await api.updateTheme(nextTheme);
+      const savedTheme = result.theme || nextTheme;
+
+      setTheme(savedTheme);
+
+      setUser((previous) =>
+        previous
+          ? { ...previous, theme: savedTheme }
+          : previous
+      );
+
+      document.documentElement.setAttribute(
+        "data-theme",
+        savedTheme
+      );
+
+      showNotice("Appearance updated.");
+    } catch (err) {
+      setError(
+        err.message || "Could not update appearance."
+      );
+    } finally {
+      setSavingTheme(false);
+    }
   }
-}
+
+  // =========================
+  // 30. ADD OR UPDATE CHAT
+  // =========================
 
   const addOrUpdateChat = useCallback((person) => {
     setChats((previous) => {
-      const existing = previous.find((chat) => sameId(chat.id, person.id));
+      const existing = previous.find((chat) =>
+        sameId(chat.id, person.id)
+      );
 
       if (existing) {
         return previous.map((chat) =>
-          sameId(chat.id, person.id) ? { ...chat, ...person } : chat
+          sameId(chat.id, person.id)
+            ? { ...chat, ...person }
+            : chat
         );
       }
 
-      return [{ ...person, messages: [], unread: 0 }, ...previous];
+      return [
+        { ...person, messages: [], unread: 0 },
+        ...previous,
+      ];
     });
   }, []);
 
-  // Restore the login session.
+  // =========================
+  // 31. RESTORE LOGIN SESSION
+  // =========================
+
   useEffect(() => {
     let cancelled = false;
 
     api.me()
       .then(({ user: current }) => {
-        if (!cancelled) setUser(current);
+        if (!cancelled) {
+          setUser(current);
+        }
       })
       .catch(() => {
-        if (!cancelled) setUser(null);
+        if (!cancelled) {
+          setUser(null);
+        }
       })
       .finally(() => {
-        if (!cancelled) setCheckingSession(false);
+        if (!cancelled) {
+          setCheckingSession(false);
+        }
       });
 
     return () => {
@@ -445,17 +985,21 @@ async function handleThemeChange(nextTheme) {
     };
   }, []);
 
+  // =========================
+  // 32. LOAD CHATS AND CONNECT SOCKET
+  // =========================
 
-  // Load conversations and connect Socket.IO.
   useEffect(() => {
     if (!user) return;
 
     let mounted = true;
 
     const chatSocket = connectSocket();
+
     socketRef.current = chatSocket;
     setSocket(chatSocket);
 
+    // Load private conversations.
     api.users()
       .then(({ users }) => {
         if (!mounted) return;
@@ -486,9 +1030,12 @@ async function handleThemeChange(nextTheme) {
         });
       })
       .catch((err) => {
-        if (mounted) setError(err.message);
+        if (mounted) {
+          setError(err.message);
+        }
       });
 
+    // Load groups.
     api.groups()
       .then(({ groups: savedGroups }) => {
         if (!mounted) return;
@@ -499,7 +1046,8 @@ async function handleThemeChange(nextTheme) {
           const groupChats = savedGroups.map((group) => {
             const existing = previous.find(
               (chat) =>
-                chat.isGroup && sameId(chat.id, group.id)
+                chat.isGroup &&
+                sameId(chat.id, group.id)
             );
 
             return {
@@ -517,7 +1065,9 @@ async function handleThemeChange(nextTheme) {
         });
       })
       .catch((err) => {
-        if (mounted) setError(err.message);
+        if (mounted) {
+          setError(err.message);
+        }
       });
 
     return () => {
@@ -535,32 +1085,10 @@ async function handleThemeChange(nextTheme) {
     };
   }, [user]);
 
-// Load incoming private message requests.
-useEffect(() => {
-  if (!user) {
-    setMessageRequests([]);
-    return;
-  }
+  // =========================
+  // 33. LOAD SELECTED CHAT HISTORY
+  // =========================
 
-  loadMessageRequests();
-}, [user, loadMessageRequests]);
-
-// Refresh requests when a new private message arrives.
-useEffect(() => {
-  if (!socket) return;
-
-  function handleNewMessage() {
-    loadMessageRequests();
-  }
-
-  socket.on("message:new", handleNewMessage);
-
-  return () => {
-    socket.off("message:new", handleNewMessage);
-  };
-}, [socket, loadMessageRequests]);
-
-  // Load the selected conversation's history.
   useEffect(() => {
     if (!user || !activeId) return;
 
@@ -586,16 +1114,24 @@ useEffect(() => {
         );
       })
       .catch((err) => {
-        if (!cancelled) setError(err.message);
+        if (!cancelled) {
+          setError(err.message);
+        }
       })
       .finally(() => {
-        if (!cancelled) setLoadingMessages(false);
+        if (!cancelled) {
+          setLoadingMessages(false);
+        }
       });
 
     return () => {
       cancelled = true;
     };
   }, [user, activeId, activeChat?.isGroup]);
+
+  // =========================
+  // 34. SCROLL TO LATEST MESSAGE
+  // =========================
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
@@ -604,21 +1140,59 @@ useEffect(() => {
     });
   }, [activeId, activeChat?.messages?.length]);
 
-  // Search for people while either modal is open.
+  // =========================
+  // 35. SEARCH PEOPLE
+  // =========================
+
   useEffect(() => {
     if (!showNewChat && !showCreateGroup) return;
 
     const timer = window.setTimeout(async () => {
       try {
         const { users } = await api.users(newSearch);
+
         setSearchResults(users);
       } catch (err) {
         setError(err.message);
       }
     }, 250);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [showNewChat, showCreateGroup, newSearch]);
+
+  // =========================
+  // 36. SELECT CHAT
+  // =========================
+
+  function selectChat(person) {
+    addOrUpdateChat({
+      ...person,
+      unread: 0,
+    });
+
+    setActiveId(person.id);
+    activeIdRef.current = person.id;
+
+    setMobileChatOpen(true);
+    setShowNewChat(false);
+
+    setNewSearch("");
+    setSearchResults([]);
+
+    setChats((previous) =>
+      previous.map((chat) =>
+        sameId(chat.id, person.id)
+          ? { ...chat, unread: 0 }
+          : chat
+      )
+    );
+  }
+
+  // =========================
+  // 37. LOGOUT
+  // =========================
 
   async function handleLogout() {
     try {
@@ -628,33 +1202,34 @@ useEffect(() => {
     }
 
     socketRef.current?.disconnect();
+    socketRef.current = null;
+
+    setSocket(null);
     setUser(null);
+
     setChats([]);
     setActiveId("");
+
     setMessageRequests([]);
     setShowMessageRequests(false);
+
     setMobileChatOpen(false);
     setMenuOpen(false);
+
     setGroups([]);
     setSelectedMemberIds([]);
     setShowCreateGroup(false);
+
+    setActiveCall(null);
+    setIncomingCall(null);
+    setCallStatus("");
+
+    cleanupCall();
   }
 
-  function selectChat(person) {
-    addOrUpdateChat({ ...person, unread: 0 });
-    setActiveId(person.id);
-    activeIdRef.current = person.id;
-    setMobileChatOpen(true);
-    setShowNewChat(false);
-    setNewSearch("");
-    setSearchResults([]);
-
-    setChats((previous) =>
-      previous.map((chat) =>
-        sameId(chat.id, person.id) ? { ...chat, unread: 0 } : chat
-      )
-    );
-  }
+  // =========================
+  // 38. CREATE GROUP
+  // =========================
 
   async function handleCreateGroup(event) {
     event.preventDefault();
@@ -662,7 +1237,9 @@ useEffect(() => {
     const name = groupName.trim();
 
     if (name.length < 2 || name.length > 50) {
-      setError("Group name must be between 2 and 50 characters.");
+      setError(
+        "Group name must be between 2 and 50 characters."
+      );
       return;
     }
 
@@ -689,19 +1266,25 @@ useEffect(() => {
         unread: 0,
       };
 
-      setGroups((previous) => [group, ...previous]);
+      setGroups((previous) => [
+        group,
+        ...previous,
+      ]);
 
       setChats((previous) => [
         newGroup,
         ...previous.filter(
-          (chat) => !(chat.isGroup && sameId(chat.id, group.id))
+          (chat) =>
+            !(chat.isGroup && sameId(chat.id, group.id))
         ),
       ]);
 
       setActiveId(group.id);
       activeIdRef.current = group.id;
+
       setMobileChatOpen(true);
       setShowCreateGroup(false);
+
       setGroupName("");
       setSelectedMemberIds([]);
       setNewSearch("");
@@ -709,11 +1292,17 @@ useEffect(() => {
 
       showNotice("Group created successfully!");
     } catch (err) {
-      setError(err.message || "Could not create the group.");
+      setError(
+        err.message || "Could not create the group."
+      );
     } finally {
       setSavingGroup(false);
     }
   }
+
+  // =========================
+  // 39. DELETE GROUP
+  // =========================
 
   async function handleDeleteGroup(group) {
     if (!group?.isGroup) return;
@@ -728,11 +1317,15 @@ useEffect(() => {
       await api.deleteGroup(group.id);
 
       setChats((previous) =>
-        previous.filter((chat) => !sameId(chat.id, group.id))
+        previous.filter(
+          (chat) => !sameId(chat.id, group.id)
+        )
       );
 
       setGroups((previous) =>
-        previous.filter((item) => !sameId(item.id, group.id))
+        previous.filter(
+          (item) => !sameId(item.id, group.id)
+        )
       );
 
       if (sameId(activeId, group.id)) {
@@ -743,59 +1336,15 @@ useEffect(() => {
 
       showNotice("Group deleted successfully.");
     } catch (err) {
-      setError(err.message || "Could not delete the group.");
+      setError(
+        err.message || "Could not delete the group."
+      );
     }
   }
 
-  
-useEffect(() => {
- if (
-  !activeChat ||
-  activeChat.isGroup ||
-  activeChat.conversationStatus !== "accepted"
-) {
-  return;
-}
-
-  console.log("Active chat:", activeChat);
-  console.log("Chat ID:", activeChat.id);
-  console.log("Chat MongoDB ID:", activeChat._id);
-
-  let cancelled = false;
-
-  api.getConversationSettings(activeChat.id)
-    .then(({ background }) => {
-      if (cancelled) return;
-
-      setChats((previous) =>
-        previous.map((chat) => {
-          if (!sameId(chat.id, activeChat.id)) return chat;
-
-          const savedBackground = background || "default";
-
-          if (chat.background === savedBackground) return chat;
-
-          return {
-            ...chat,
-            background: savedBackground,
-          };
-        })
-      );
-    })
-    .catch((err) => {
-      if (!cancelled) {
-        console.error("Could not load conversation settings:", err);
-      }
-    });
-
-  return () => {
-    cancelled = true;
-  };
-}, [
-  activeChat?.id,
-  activeChat?.isGroup,
-  activeChat?.conversationStatus,
-]);
+  // =========================
+  // 40. LOADING SCREEN
+  // =========================
 
   if (checkingSession) {
     return (
@@ -805,6 +1354,10 @@ useEffect(() => {
       </div>
     );
   }
+
+  // =========================
+  // 41. AUTHENTICATION SCREEN
+  // =========================
 
   if (!user) {
     return (
@@ -817,9 +1370,19 @@ useEffect(() => {
     );
   }
 
+  // =========================
+  // 42. MAIN APPLICATION
+  // =========================
+
   return (
     <main className="app-shell">
-      <div className={mobileChatOpen ? "sidebar-hidden-mobile" : ""}>
+
+      {/* CHAT SIDEBAR */}
+      <div
+        className={
+          mobileChatOpen ? "sidebar-hidden-mobile" : ""
+        }
+      >
         <ChatSidebar
           user={user}
           chats={chats}
@@ -841,24 +1404,24 @@ useEffect(() => {
           setError={setError}
           setSelectedMemberIds={setSelectedMemberIds}
           setGroupName={setGroupName}
-setNewSearch={setNewSearch}
-setShowSettings={setShowSettings}
-messageRequestCount={messageRequests.length}
-setShowMessageRequests={setShowMessageRequests}
+          setNewSearch={setNewSearch}
+          setShowSettings={setShowSettings}
         />
       </div>
 
+      {/* CHAT PANEL */}
       <section
-  className={`chat-panel ${
-    mobileChatOpen ? "chat-panel-mobile-open" : ""
-  } ${
-    activeChat
-      ? `chat-background-${activeChat.background || "default"}`
-      : ""
-  }`}
->
+        className={`chat-panel ${
+          mobileChatOpen ? "chat-panel-mobile-open" : ""
+        } ${
+          activeChat
+            ? `chat-background-${activeChat.background || "default"}`
+            : ""
+        }`}
+      >
         {activeChat ? (
           <>
+            {/* CHAT HEADER */}
             <ChatHeader
               activeChat={activeChat}
               onlineIds={onlineIds}
@@ -868,66 +1431,84 @@ setShowMessageRequests={setShowMessageRequests}
               onOpenBackgroundPicker={openBackgroundPicker}
               messageRequestCount={messageRequests.length}
               setShowMessageRequests={setShowMessageRequests}
+              onStartCall={handleStartCall}
+              callStatus={callStatus}
             />
 
-            <ChatError error={error} onDismiss={() => setError("")} />
-<ConversationBody
-  activeChat={activeChat}
-  loadingMessages={loadingMessages}
-  user={user}
-  onReply={handleReply}
-  deleteMessage={handleDeleteMessage}
-  editingMessageId={editingMessageId}
-  editDraft={editDraft}
-  savingEdit={savingEdit}
-  setEditDraft={setEditDraft}
-  saveEditedMessage={saveEditedMessage}
-  cancelEditing={cancelEditing}
-  startEditing={startEditing}
-  removeImage={removeImage}
-  bottomRef={bottomRef}
-  mentionSuccessToast={mentionSuccessToast}
-  setMentionSuccessToast={setMentionSuccessToast}
-/>
+            {/* CHAT ERROR */}
+            <ChatError
+              error={error}
+              onDismiss={() => setError("")}
+            />
 
+            {/* MESSAGES */}
+            <ConversationBody
+              activeChat={activeChat}
+              loadingMessages={loadingMessages}
+              user={user}
+              onReply={handleReply}
+              deleteMessage={handleDeleteMessage}
+              editingMessageId={editingMessageId}
+              editDraft={editDraft}
+              savingEdit={savingEdit}
+              setEditDraft={setEditDraft}
+              saveEditedMessage={saveEditedMessage}
+              cancelEditing={cancelEditing}
+              startEditing={startEditing}
+              removeImage={removeImage}
+              bottomRef={bottomRef}
+              mentionSuccessToast={mentionSuccessToast}
+              setMentionSuccessToast={setMentionSuccessToast}
+            />
 
+            {/* REPLY PREVIEW */}
             <ReplyPreview
               replyTo={replyTo}
               onCancel={() => setReplyTo(null)}
-            /><MessageComposer
-  activeChat={activeChat}
-  draft={draft}
-  setDraft={setDraft}
-  inputRef={inputRef}
-  sendMessage={sendMessage}
-  showNotice={showNotice}
-  socketStatus={socketStatus}
-  mentionUsers={
-    activeChat.isGroup
-      ? activeChat.members || []
-      : []
-  }
-/>
+            />
+
+            {/* MESSAGE COMPOSER */}
+            <MessageComposer
+              activeChat={activeChat}
+              draft={draft}
+              setDraft={setDraft}
+              inputRef={inputRef}
+              sendMessage={sendMessage}
+              showNotice={showNotice}
+              socketStatus={socketStatus}
+              mentionUsers={
+                activeChat.isGroup
+                  ? activeChat.members || []
+                  : []
+              }
+            />
           </>
         ) : (
+          /* EMPTY CHAT SCREEN */
           <div className="empty-chat-panel">
             <div className="welcome-icon">
               <MessageCircle size={28} />
             </div>
+
             <h2>Your conversations, all in one place.</h2>
+
             <p>
-              Select someone from your people list or start a new conversation.
+              Select someone from your people list or start a new
+              conversation.
             </p>
+
             <button
               className="create-chat-submit"
               onClick={() => setShowNewChat(true)}
             >
-              <Plus size={18} /> Find people
+              <Plus size={18} />
+              Find people
             </button>
           </div>
         )}
       </section>
 
+      {/* FIND PEOPLE MODAL */}
       <FindPeopleModal
         open={showNewChat}
         setOpen={setShowNewChat}
@@ -936,33 +1517,43 @@ setShowMessageRequests={setShowMessageRequests}
         searchResults={searchResults}
         selectChat={selectChat}
       />
-<SettingsModal
-  isOpen={showSettings}
-  onClose={() => setShowSettings(false)}
-  theme={theme}
-  onThemeChange={handleThemeChange}
-  savingTheme={savingTheme}
-  showActiveStatus={showActiveStatus}
-  onActiveStatusChange={handleActiveStatusChange}
-  savingActiveStatus={savingActiveStatus}
-/>
-{showMessageRequests && (
-  <MessageRequestsModal
-    requests={messageRequests}
-    loading={loadingRequests}
-    onClose={() => setShowMessageRequests(false)}
-    onRequestUpdated={loadMessageRequests}
-    onAccepted={handleAcceptedRequest}
-    showNotice={showNotice}
-  />
-)}
-<ChatBackgroundPicker
-  isOpen={backgroundPickerOpen}
-  onClose={() => setBackgroundPickerOpen(false)}
-  currentBackground={activeChat?.background || "default"}
-  onSelect={handleBackgroundChange}
-  saving={savingBackground}
-/>
+
+      {/* SETTINGS MODAL */}
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        theme={theme}
+        onThemeChange={handleThemeChange}
+        savingTheme={savingTheme}
+        showActiveStatus={showActiveStatus}
+        onActiveStatusChange={handleActiveStatusChange}
+        savingActiveStatus={savingActiveStatus}
+      />
+
+      {/* MESSAGE REQUESTS MODAL */}
+      {showMessageRequests && (
+        <MessageRequestsModal
+          requests={messageRequests}
+          loading={loadingRequests}
+          onClose={() => setShowMessageRequests(false)}
+          onRequestUpdated={loadMessageRequests}
+          onAccepted={handleAcceptedRequest}
+          showNotice={showNotice}
+        />
+      )}
+
+      {/* CHAT BACKGROUND PICKER */}
+      <ChatBackgroundPicker
+        isOpen={backgroundPickerOpen}
+        onClose={() => setBackgroundPickerOpen(false)}
+        currentBackground={
+          activeChat?.background || "default"
+        }
+        onSelect={handleBackgroundChange}
+        saving={savingBackground}
+      />
+
+      {/* CREATE GROUP MODAL */}
       <CreateGroupModal
         open={showCreateGroup}
         setOpen={setShowCreateGroup}
@@ -978,12 +1569,35 @@ setShowMessageRequests={setShowMessageRequests}
         handleCreateGroup={handleCreateGroup}
       />
 
+      {/* VOICE AND VIDEO CALL MODAL */}
+      <CallModal
+        call={incomingCall || activeCall}
+        localStream={localStream}
+        remoteStream={remoteStream}
+        connectionState={connectionState}
+        mediaError={mediaError}
+        isIncoming={Boolean(incomingCall)}
+        isOutgoing={
+          Boolean(activeCall && callStatus === "Calling...")
+        }
+        isMuted={isMuted}
+        isCameraOff={isCameraOff}
+        onAccept={handleAcceptIncoming}
+        onDecline={handleDeclineIncoming}
+        onEnd={handleEndCall}
+        onToggleMute={handleToggleMute}
+        onToggleCamera={handleToggleCamera}
+      />
+
+      {/* NOTIFICATION TOASTS */}
       <NotificationToasts
         toast={toast}
         mentionToast={mentionToast}
         onDismissMention={() => setMentionToast(null)}
         mentionSuccessToast={mentionSuccessToast}
-        onDismissMentionSuccess={() => setMentionSuccessToast("")}
+        onDismissMentionSuccess={() =>
+          setMentionSuccessToast("")
+        }
       />
 
     </main>

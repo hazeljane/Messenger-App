@@ -6,7 +6,7 @@ import { registerGroupAttachmentHandlers } from "./groupAttachmentHandlers.js";
 import { registerPrivateMessageHandlers } from "./privateMessageHandlers.js";
 import { registerPrivateMessageEdit } from "./privateMessageEdit.js";
 import { registerPrivateMessageDelete } from "./privateMessageDelete.js";
-
+import { registerCallHandlers } from "./callHandlers.js";
 import { registerPresenceHandlers } from "./presenceHandlers.js";
 
 export function registerSocketHandlers(io) {
@@ -20,6 +20,7 @@ export function registerSocketHandlers(io) {
 
     // Presence handlers
     registerPresenceHandlers(io, socket);
+    registerCallHandlers(io, socket);
     // Private messages
     registerPrivateMessageHandlers(io, socket);
     registerPrivateMessageEdit(io, socket);

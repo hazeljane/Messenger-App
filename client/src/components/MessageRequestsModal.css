@@ -222,14 +222,26 @@
   color: #ffffff;
 }
 
-.request-action.accept:hover:not(:disabled) {
-  background: #6e40b5;
+.request-action:hover:not(:disabled) {
+  border-color: #c9b3e9;
+  background: #eee4fb;
+  color: #7047ae !important;
 }
 
-.request-action:hover:not(:disabled) {
-  border-color: #d6c5ed;
-  background: #f4effb;
-  color: #7047ae;
+.request-action:hover:not(:disabled) svg {
+  color: #7047ae !important;
+  stroke: #7047ae;
+}
+
+/* Keep the Accept button readable */
+.request-action.accept:hover:not(:disabled) {
+  background: #6e40b5;
+  color: #ffffff !important;
+}
+
+.request-action.accept:hover:not(:disabled) svg {
+  color: #ffffff !important;
+  stroke: #ffffff;
 }
 
 /* FOOTER */

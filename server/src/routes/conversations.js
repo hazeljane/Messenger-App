@@ -24,11 +24,25 @@ const allowedBackgrounds = [
 async function requireAcceptedConversation(userId, currentUserId) {
   const key = conversationKey(currentUserId, userId);
 
-  return Conversation.findOne({
+  const conversation = await Conversation.findOne({
     conversationKey: key,
     participants: currentUserId,
-    status: "accepted",
+  }).lean();
+
+  console.log("Conversation authorization check:", {
+    key,
+    currentUserId: String(currentUserId),
+    userId: String(userId),
+    found: Boolean(conversation),
+    status: conversation?.status,
+    participants: conversation?.participants?.map(String),
   });
+
+  if (!conversation || conversation.status !== "accepted") {
+    return null;
+  }
+
+  return conversation;
 }
 
 // Get incoming private message requests

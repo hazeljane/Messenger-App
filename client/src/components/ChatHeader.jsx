@@ -1,3 +1,4 @@
+
 import "./ChatHeader.css";
 import { useState } from "react";
 import {
@@ -7,6 +8,7 @@ import {
   Video,
   Palette,
   Trash2,
+  Mail,
 } from "lucide-react";
 
 import Avatar from "./Avatar.jsx";
@@ -18,6 +20,10 @@ export default function ChatHeader({
   showNotice,
   handleDeleteGroup,
   onOpenBackgroundPicker,
+  onStartCall,
+  callStatus,
+  messageRequestCount = 0,
+  setShowMessageRequests,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -32,6 +38,24 @@ export default function ChatHeader({
   const handleDeleteClick = () => {
     setMenuOpen(false);
     handleDeleteGroup(activeChat);
+  };
+
+  const handleCallClick = (callType) => {
+    if (!isOnline) {
+      showNotice("This user is currently offline.");
+      return;
+    }
+
+    if (!onStartCall) {
+      showNotice("Calling is not connected yet.");
+      return;
+    }
+
+    onStartCall(activeChat, callType);
+  };
+
+  const handleMessageRequestsClick = () => {
+    setShowMessageRequests?.(true);
   };
 
   return (
@@ -67,14 +91,34 @@ export default function ChatHeader({
       </div>
 
       <div className="header-actions">
+        {/* Message Requests */}
+        <button
+          className="icon-button message-requests-button"
+          aria-label={`Message requests${messageRequestCount > 0
+            ? `, ${messageRequestCount} pending`
+            : ""}`}
+          title="Message requests"
+          onClick={handleMessageRequestsClick}
+        >
+          <Mail size={19} />
+
+          {messageRequestCount > 0 && (
+            <span className="request-count">
+              {messageRequestCount > 99
+                ? "99+"
+                : messageRequestCount}
+            </span>
+          )}
+        </button>
+
         {!isGroup && (
           <>
             <button
               className="icon-button"
               aria-label="Voice call"
-              onClick={() =>
-                showNotice("Voice calling is not enabled yet.")
-              }
+              title="Voice call"
+              disabled={!isOnline || Boolean(callStatus)}
+              onClick={() => handleCallClick("audio")}
             >
               <Phone size={19} />
             </button>
@@ -82,9 +126,9 @@ export default function ChatHeader({
             <button
               className="icon-button"
               aria-label="Video call"
-              onClick={() =>
-                showNotice("Video calling is not enabled yet.")
-              }
+              title="Video call"
+              disabled={!isOnline || Boolean(callStatus)}
+              onClick={() => handleCallClick("video")}
             >
               <Video size={20} />
             </button>

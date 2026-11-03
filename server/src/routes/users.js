@@ -89,5 +89,4 @@ router.patch("/active-status", requireAuth, async (req, res) => {
   }
 });
 
-
 export default router;

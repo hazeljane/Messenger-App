@@ -31,7 +31,7 @@ export function configureSocketAuth(io) {
       );
 
       const user = await User.findById(payload.userId).select(
-        "_id username email role canPrivateMessage"
+        "_id username email role"
       );
 
       if (!user) {
@@ -43,7 +43,6 @@ export function configureSocketAuth(io) {
         username: user.username,
         email: user.email,
         role: user.role || "member",
-        canPrivateMessage: user.canPrivateMessage === true,
       };
 
       next();
