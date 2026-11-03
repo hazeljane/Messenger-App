@@ -58,7 +58,7 @@ useEffect(() => {
   return () => {
     video.srcObject = null;
   };
-}, [localStream,isVideo]);
+}, [localStream,isVideo, isCameraOff]);
 
  useEffect(() => {
   const video = remoteVideoRef.current;
