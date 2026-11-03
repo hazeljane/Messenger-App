@@ -141,7 +141,6 @@ useEffect(() => {
                 ref={remoteVideoRef}
                 className="remote-video"
                 autoPlay
-                muted
                 playsInline
               />
 
