@@ -133,45 +133,30 @@ export default function useWebRTC(socket) {
       throw new Error(message);
     }
   }, []);
+const addCandidate = useCallback((candidate) => {
+  candidateQueueRef.current = candidateQueueRef.current
+    .catch(() => {})
+    .then(async () => {
+      const peer = peerRef.current;
 
-  // ==========================================
-  // 5. ADD REMOTE ICE CANDIDATE
-  // ==========================================
+      if (!peer || !peer.remoteDescription) {
+        pendingCandidatesRef.current.push(candidate);
+        return;
+      }
 
-  const addCandidate = useCallback((candidate) => {
-    const peer = peerRef.current;
+      try {
+        await peer.addIceCandidate(
+          new RTCIceCandidate(candidate)
+        );
 
-    if (!peer || !peer.remoteDescription) {
-      return Promise.resolve();
-    }
+        console.log("Remote ICE candidate added.");
+      } catch (error) {
+        console.error("Error adding remote ICE candidate:", error);
+      }
+    });
 
-    // Process candidates in order.
-    candidateQueueRef.current = candidateQueueRef.current
-      .catch(() => {})
-      .then(async () => {
-        const currentPeer = peerRef.current;
-
-        if (
-          !currentPeer ||
-          currentPeer !== peer ||
-          !currentPeer.remoteDescription
-        ) {
-          return;
-        }
-
-        try {
-          await currentPeer.addIceCandidate(
-            new RTCIceCandidate(candidate)
-          );
-
-          console.log("Remote ICE candidate added.");
-        } catch (error) {
-          console.error("Error adding remote ICE candidate:", error);
-        }
-      });
-
-    return candidateQueueRef.current;
-  }, []);
+  return candidateQueueRef.current;
+}, []);
 
   // ==========================================
   // 6. FLUSH PENDING REMOTE CANDIDATES

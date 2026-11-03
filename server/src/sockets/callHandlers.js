@@ -173,7 +173,9 @@ socket.on("call:start", async (payload, callback) => {
       const { callerId, callId, accepted, answer } = payload || {};
 
       const call = getCallForUser(callId, userId);
-
+      if (!call || call.status === "ended") {
+        return;
+      }
       if (
         !call ||
         call.callerId !== String(callerId) ||
@@ -239,18 +241,19 @@ if (!callerRoom || callerRoom.size === 0) {
       });
     }
   });
-
 // Forward ICE candidates only between call participants.
 socket.on("call:ice-candidate", (payload) => {
   try {
     const { recipientId, callId, candidate } = payload || {};
 
+    // Confirm that the call exists and this user is a participant.
     const call = getCallForUser(callId, userId);
 
+    // Validate the ICE candidate.
     if (
-      !call ||
-      !["ringing", "accepted"].includes(call.status) ||
-      !candidate
+      !candidate ||
+      typeof candidate !== "object" ||
+      typeof candidate.candidate !== "string"
     ) {
       return;
     }
@@ -261,10 +264,11 @@ socket.on("call:ice-candidate", (payload) => {
         : call.callerId;
 
     // Only allow candidates to be sent to the other participant.
-    if (String(recipientId) !== otherUserId) {
+    if (String(recipientId) !== String(otherUserId)) {
       return;
     }
 
+    // Forward the candidate to the other participant.
     io.to(`user:${otherUserId}`).emit("call:ice-candidate", {
       callId: call.callId,
       senderId: userId,
