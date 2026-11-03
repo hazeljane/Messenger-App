@@ -8,7 +8,7 @@ import helmet from "helmet";
 import { Server } from "socket.io";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
+import groupCallRoutes from "./routes/groupCalls.js";
 import { config } from "./config.js";
 
 import authRoutes from "./routes/auth.js";
@@ -90,6 +90,7 @@ app.use("/api/conversations", conversationRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/groups", groupRoutes);
+app.use("/api/group-calls", groupCallRoutes);
 app.use("/api/uploads", uploadRoutes);
 
 app.use("/api/messages", messageRoutes);

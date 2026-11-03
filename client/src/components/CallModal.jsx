@@ -92,13 +92,13 @@ useEffect(() => {
                   : "Voice call"}
           </span>
 
-          <button
-            className="call-close-button"
-            onClick={onEnd}
-            aria-label="End call"
-          >
-            <PhoneOff size={18} />
-          </button>
+       <button
+  className="call-close-button"
+  onClick={isIncoming ? onDecline : onEnd}
+  aria-label={isIncoming ? "Decline call" : "End call"}
+>
+  <PhoneOff size={18} />
+</button>
         </header>
 
         <div className={`call-media-area ${isVideo ? "video-call" : ""}`}>

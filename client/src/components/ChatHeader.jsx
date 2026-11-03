@@ -27,20 +27,40 @@ export default function ChatHeader({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const isGroup = activeChat.isGroup;
-  const isOnline = onlineIds.has(String(activeChat.id));
+  if (!activeChat) return null;
+
+  const isGroup = Boolean(activeChat.isGroup);
+  const isOnline =
+    onlineIds?.has(String(activeChat.id)) ?? false;
+
+  // =========================
+  // CHANGE CHAT BACKGROUND
+  // =========================
 
   const handleBackgroundClick = () => {
     setMenuOpen(false);
     onOpenBackgroundPicker?.(activeChat);
   };
 
+  // =========================
+  // DELETE GROUP
+  // =========================
+
   const handleDeleteClick = () => {
     setMenuOpen(false);
-    handleDeleteGroup(activeChat);
+    handleDeleteGroup?.(activeChat);
   };
 
+  // =========================
+  // START VOICE OR VIDEO CALL
+  // =========================
+
   const handleCallClick = (callType) => {
+    if (isGroup) {
+      showNotice("Calls are only available for private conversations.");
+      return;
+    }
+
     if (!isOnline) {
       showNotice("This user is currently offline.");
       return;
@@ -53,6 +73,10 @@ export default function ChatHeader({
 
     onStartCall(activeChat, callType);
   };
+
+  // =========================
+  // MESSAGE REQUESTS
+  // =========================
 
   const handleMessageRequestsClick = () => {
     setShowMessageRequests?.(true);
@@ -91,12 +115,14 @@ export default function ChatHeader({
       </div>
 
       <div className="header-actions">
-        {/* Message Requests */}
+        {/* MESSAGE REQUESTS */}
         <button
           className="icon-button message-requests-button"
-          aria-label={`Message requests${messageRequestCount > 0
-            ? `, ${messageRequestCount} pending`
-            : ""}`}
+          aria-label={`Message requests${
+            messageRequestCount > 0
+              ? `, ${messageRequestCount} pending`
+              : ""
+          }`}
           title="Message requests"
           onClick={handleMessageRequestsClick}
         >
@@ -111,6 +137,7 @@ export default function ChatHeader({
           )}
         </button>
 
+        {/* VOICE AND VIDEO CALLS */}
         {!isGroup && (
           <>
             <button
@@ -137,12 +164,15 @@ export default function ChatHeader({
 
         <span className="action-divider" />
 
+        {/* CONVERSATION OPTIONS */}
         <div className="chat-options">
           <button
             className="icon-button"
             aria-label="Conversation options"
             aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((previous) => !previous)}
+            onClick={() =>
+              setMenuOpen((previous) => !previous)
+            }
           >
             <MoreHorizontal size={21} />
           </button>

@@ -483,82 +483,54 @@ function handleCallEnded(data) {
   // =========================
   // 20. START CALL
   // =========================
+const handleStartCall = async (chat, callType) => {
+  if (!socketRef.current || !chat || activeCall || incomingCall) {
+    return;
+  }
 
-  async function handleStartCall(chat, callType) {
-    if (!socketRef.current) {
-      showNotice("Connection is not ready. Please try again.");
-      return;
-    }
+  if (chat.isGroup) {
+    showNotice("Calls are only available for private conversations.");
+    return;
+  }
 
-    if (!chat || chat.isGroup) {
-      showNotice("Calls are only available in private conversations.");
-      return;
-    }
+  try {
+    setCallStatus("Calling...");
 
-    if (chat.conversationStatus !== "accepted") {
-      showNotice("Accept the message request before calling.");
-      return;
-    }
+    const offer = await createOffer(chat.id, callType);
 
-    if (!onlineIds.has(String(chat.id))) {
-      showNotice("This user is currently offline.");
-      return;
-    }
+    socketRef.current.emit(
+      "call:start",
+      {
+        recipientId: chat.id,
+        callType,
+        offer,
+      },
+      (response) => {
+        if (!response?.ok) {
+          cleanupCall();
+          setCallStatus("");
+          showNotice(response?.message || "Could not start call.");
+          return;
+        }
 
-    if (activeCall || incomingCall) {
-      showNotice("You already have an active call.");
-      return;
-    }
+        setCallId(response.callId);
 
-    try {
-      setCallStatus("Calling...");
-
-      const offer = await createOffer(chat.id, callType);
-
-      socketRef.current.emit(
-        "call:start",
-        {
+        setActiveCall({
+          callId: response.callId,
           recipientId: chat.id,
           callType,
-          offer,
-        },
-        async (response) => {
-          if (!response?.ok) {
-            cleanupCall();
-            setCallStatus("");
-
-            showNotice(
-              response?.message || "Could not start the call."
-            );
-
-            return;
-          }
-
-          setCallId(response.callId);
-
-          setActiveCall({
-            callId: response.callId,
-            recipientId: chat.id,
-            callType,
-            displayName:
-              chat.name || chat.username || "Chatterbox user",
-            status: "Calling...",
-          });
-
-          setCallStatus("Calling...");
-        }
-      );
-    } catch (err) {
-      console.error("Could not start call:", err);
-
-      cleanupCall();
-      setCallStatus("");
-
-      showNotice(
-        err.message || "Could not access your microphone or camera."
-      );
-    }
+          displayName: chat.username || chat.name,
+          status: "Calling...",
+        });
+      }
+    );
+  } catch (error) {
+    console.error("Start call error:", error);
+    cleanupCall();
+    setCallStatus("");
+    showNotice(error.message || "Could not start call.");
   }
+};
 // =========================
 // 21. ACCEPT INCOMING CALL
 // =========================
@@ -1422,19 +1394,18 @@ useEffect(() => {
         {activeChat ? (
           <>
             {/* CHAT HEADER */}
-            <ChatHeader
-              activeChat={activeChat}
-              onlineIds={onlineIds}
-              setMobileChatOpen={setMobileChatOpen}
-              showNotice={showNotice}
-              handleDeleteGroup={handleDeleteGroup}
-              onOpenBackgroundPicker={openBackgroundPicker}
-              messageRequestCount={messageRequests.length}
-              setShowMessageRequests={setShowMessageRequests}
-              onStartCall={handleStartCall}
-              callStatus={callStatus}
-            />
-
+<ChatHeader
+  activeChat={activeChat}
+  onlineIds={onlineIds}
+  setMobileChatOpen={setMobileChatOpen}
+  showNotice={showNotice}
+  handleDeleteGroup={handleDeleteGroup}
+  onOpenBackgroundPicker={openBackgroundPicker}
+  onStartCall={handleStartCall}
+  callStatus={callStatus}
+  messageRequestCount={messageRequests.length}
+  setShowMessageRequests={setShowMessageRequests}
+/>
             {/* CHAT ERROR */}
             <ChatError
               error={error}
@@ -1569,25 +1540,25 @@ useEffect(() => {
         handleCreateGroup={handleCreateGroup}
       />
 
-      {/* VOICE AND VIDEO CALL MODAL */}
-      <CallModal
-        call={incomingCall || activeCall}
-        localStream={localStream}
-        remoteStream={remoteStream}
-        connectionState={connectionState}
-        mediaError={mediaError}
-        isIncoming={Boolean(incomingCall)}
-        isOutgoing={
-          Boolean(activeCall && callStatus === "Calling...")
-        }
-        isMuted={isMuted}
-        isCameraOff={isCameraOff}
-        onAccept={handleAcceptIncoming}
-        onDecline={handleDeclineIncoming}
-        onEnd={handleEndCall}
-        onToggleMute={handleToggleMute}
-        onToggleCamera={handleToggleCamera}
-      />
+{/* VOICE AND VIDEO CALL MODAL */}
+<CallModal
+  call={incomingCall || activeCall}
+  localStream={localStream}
+  remoteStream={remoteStream}
+  connectionState={connectionState}
+  mediaError={mediaError}
+  isIncoming={Boolean(incomingCall)}
+  isOutgoing={
+    Boolean(activeCall && callStatus === "Calling...")
+  }
+  isMuted={isMuted}
+  isCameraOff={isCameraOff}
+  onAccept={handleAcceptIncoming}
+  onDecline={handleDeclineIncoming}
+  onEnd={handleEndCall}
+  onToggleMute={handleToggleMute}
+  onToggleCamera={handleToggleCamera}
+/>
 
       {/* NOTIFICATION TOASTS */}
       <NotificationToasts

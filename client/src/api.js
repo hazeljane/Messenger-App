@@ -164,8 +164,28 @@ console.log("Loaded API file:", import.meta.url);
 console.log("API methods in api.js:", Object.keys(api));
 console.log("getMessageRequests in api.js:", api.getMessageRequests);
 export function connectSocket() {
-  return io(API_URL, {
+  const socket = io(API_URL, {
     withCredentials: true,
-    transports: ["websocket", "polling"],
+
+    // Temporarily use polling first to diagnose the connection.
+    transports: ["polling", "websocket"],
+
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
   });
+
+  socket.on("connect", () => {
+    console.log("Socket.IO connected:", socket.id);
+  });
+
+  socket.on("connect_error", (error) => {
+    console.error("Socket.IO connection error:", error.message);
+  });
+
+  socket.on("disconnect", (reason) => {
+    console.log("Socket.IO disconnected:", reason);
+  });
+
+  return socket;
 }
