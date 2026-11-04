@@ -1,79 +1,127 @@
-/* Find People / New Chat modal styles */
 
-/* =====================================
-   CHATTERBOX — FIND PEOPLE MODAL
-===================================== */
+/* =====================================================
+   04 - FIND PEOPLE / NEW CHAT MODAL
+   Chatterbox Responsive Design
+===================================================== */
+
+/* -----------------------------------------
+   1. MODAL BACKDROP
+----------------------------------------- */
 
 .modal-backdrop {
   position: fixed;
   inset: 0;
   z-index: 1000;
+
   display: grid;
   place-items: center;
+
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+
   padding: 20px;
+
   background: rgba(36, 32, 57, 0.58);
   backdrop-filter: blur(7px);
   -webkit-backdrop-filter: blur(7px);
+
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
+
+
+/* -----------------------------------------
+   2. MODAL CONTAINER
+----------------------------------------- */
 
 .new-chat-modal {
   display: flex;
   flex-direction: column;
+
   width: min(460px, 100%);
   max-height: min(640px, 88dvh);
   min-height: 0;
+
   padding: 25px;
+
   overflow: hidden;
+
   background: #fff;
   border: 1px solid #eeebf6;
   border-radius: 23px;
+
   box-shadow: 0 24px 80px rgba(31, 24, 62, 0.22);
 }
 
-/* Heading */
+
+/* -----------------------------------------
+   3. MODAL HEADING
+----------------------------------------- */
 
 .modal-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
+
+  flex-shrink: 0;
+  min-width: 0;
   gap: 12px;
 }
 
 .modal-top h2 {
   margin: 6px 0 0;
+
   color: #29243e;
+
   font: 800 24px 'Manrope', sans-serif;
   letter-spacing: -0.8px;
 }
 
 .new-chat-modal > p {
+  flex-shrink: 0;
+
   margin: 10px 0 20px;
+
   color: #89859b;
   font-size: 12px;
   line-height: 1.7;
 }
 
-/* Search field: white in every state */
+
+/* -----------------------------------------
+   4. SEARCH INPUT
+----------------------------------------- */
 
 .new-chat-modal .modal-search {
   display: flex;
   align-items: center;
+
   flex-shrink: 0;
+  min-width: 0;
   gap: 10px;
+
   height: 49px;
   margin: 0 0 15px;
   padding: 0 14px;
+
   color: #8b7cdb;
+
   background-color: #fff !important;
   border: 1px solid #e6e1f1;
   border-radius: 13px;
+
   box-shadow: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .new-chat-modal .modal-search:focus-within {
   background-color: #fff !important;
   border-color: #9583f0;
+
   box-shadow: 0 0 0 4px rgba(132, 111, 235, 0.11);
 }
 
@@ -86,20 +134,27 @@
 .new-chat-modal .modal-search input:focus,
 .new-chat-modal .modal-search input:active {
   display: block;
+
   flex: 1;
   width: 100%;
   min-width: 0;
   height: 100%;
+
   margin: 0;
   padding: 0;
+
   color: #302b43 !important;
   background-color: #fff !important;
+
   -webkit-text-fill-color: #302b43 !important;
   caret-color: #7868e6;
+
   border: 0 !important;
   outline: none !important;
   box-shadow: none !important;
-  font: 400 12px 'DM Sans', sans-serif;
+
+  font: 400 13px 'DM Sans', sans-serif;
+
   opacity: 1;
 }
 
@@ -109,23 +164,37 @@
   opacity: 1;
 }
 
-/* Prevent browser autofill from tinting the field */
+
+/* Browser autofill */
 
 .new-chat-modal .modal-search input:-webkit-autofill,
 .new-chat-modal .modal-search input:-webkit-autofill:hover,
 .new-chat-modal .modal-search input:-webkit-autofill:focus {
   -webkit-text-fill-color: #302b43 !important;
-  -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+
+  -webkit-box-shadow:
+    0 0 0 1000px #fff inset !important;
 }
 
-/* Results list */
+
+/* -----------------------------------------
+   5. PEOPLE RESULTS SCROLL AREA
+----------------------------------------- */
 
 .new-chat-modal .people-results {
   flex: 1 1 auto;
+
+  min-width: 0;
   min-height: 100px;
+
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+
+  -webkit-overflow-scrolling: touch;
+
   scrollbar-width: thin;
   scrollbar-color: #dcd5f1 transparent;
 }
@@ -139,23 +208,47 @@
   border-radius: 20px;
 }
 
+.new-chat-modal .people-results::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+
+/* -----------------------------------------
+   6. PEOPLE RESULT ITEM
+----------------------------------------- */
+
 .new-chat-modal .people-result {
   display: flex;
   align-items: center;
+
   width: 100%;
+  min-width: 0;
   gap: 12px;
+
   padding: 13px 9px;
+
   color: #302b43;
   text-align: left;
+
   background: #fff;
+
   border: 0;
   border-bottom: 1px solid #f1eef7;
   border-radius: 12px;
-  transition: background 0.2s, transform 0.2s;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s,
+    transform 0.2s;
 }
 
 .new-chat-modal .people-result:hover {
   background: #f8f6ff;
+}
+
+.new-chat-modal .people-result:active {
+  transform: scale(0.99);
 }
 
 .new-chat-modal .people-result:focus-visible {
@@ -167,43 +260,59 @@
   display: flex;
   flex: 1;
   flex-direction: column;
+
   min-width: 0;
   gap: 5px;
 }
 
 .new-chat-modal .people-result strong {
   overflow: hidden;
+
   color: #342e49;
   font-size: 12px;
   font-weight: 700;
+
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .new-chat-modal .people-result small {
   overflow: hidden;
+
   color: #9691a8;
   font-size: 10px;
+
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Message action */
+
+/* -----------------------------------------
+   7. OPEN MESSAGE ACTION
+----------------------------------------- */
 
 .new-chat-modal .result-open {
   display: inline-flex;
   align-items: center;
+
   flex-shrink: 0;
   gap: 4px;
+
   padding: 8px 10px;
+
   color: #7662df;
   background: #f1edff;
+
   border: 1px solid #e9e2ff;
   border-radius: 9px;
+
   font-size: 10px;
   font-weight: 700;
   white-space: nowrap;
-  transition: color 0.2s, background 0.2s;
+
+  transition:
+    color 0.2s,
+    background 0.2s;
 }
 
 .new-chat-modal .people-result:hover .result-open {
@@ -217,14 +326,19 @@
   font-size: 14px;
 }
 
-/* No results */
+
+/* -----------------------------------------
+   8. NO RESULTS
+----------------------------------------- */
 
 .new-chat-modal .no-results {
   display: flex;
   align-items: center;
   flex-direction: column;
+
   gap: 9px;
   padding: 32px 12px;
+
   color: #9690aa;
   text-align: center;
   font-size: 12px;
@@ -232,11 +346,15 @@
 
 .new-chat-modal .no-results > svg {
   box-sizing: content-box;
+
   width: 24px;
   height: 24px;
+
   padding: 13px;
+
   color: #8270e7;
   background: #f3efff;
+
   border-radius: 16px;
 }
 
@@ -252,7 +370,27 @@
   line-height: 1.6;
 }
 
-/* Mobile */
+
+/* -----------------------------------------
+   9. TABLETS
+----------------------------------------- */
+
+@media (max-width: 900px) {
+  .modal-backdrop {
+    padding: 18px;
+  }
+
+  .new-chat-modal {
+    width: min(440px, 100%);
+    max-height: 88dvh;
+    padding: 23px;
+  }
+}
+
+
+/* -----------------------------------------
+   10. MOBILE DEVICES
+----------------------------------------- */
 
 @media (max-width: 720px) {
   .modal-backdrop {
@@ -261,6 +399,7 @@
 
   .new-chat-modal {
     width: 100%;
+    max-width: 480px;
     max-height: 85dvh;
     padding: 21px 17px;
     border-radius: 21px;
@@ -270,20 +409,321 @@
     font-size: 23px;
   }
 
+  .new-chat-modal > p {
+    margin-bottom: 16px;
+  }
+
+  .new-chat-modal .modal-search {
+    height: 47px;
+  }
+
   .new-chat-modal .people-result {
     gap: 9px;
     padding: 12px 5px;
   }
+
+  .new-chat-modal .result-open {
+    padding: 8px;
+  }
 }
+
+
+/* -----------------------------------------
+   11. SMALL PHONES
+----------------------------------------- */
+
+@media (max-width: 380px) {
+  .modal-backdrop {
+    padding: 8px;
+  }
+
+  .new-chat-modal {
+    max-height: 90dvh;
+    padding: 18px 13px;
+    border-radius: 18px;
+  }
+
+  .modal-top h2 {
+    font-size: 21px;
+  }
+
+  .new-chat-modal > p {
+    font-size: 11px;
+  }
+
+  .new-chat-modal .people-result {
+    gap: 7px;
+  }
+
+  .new-chat-modal .people-result strong {
+    font-size: 11px;
+  }
+
+  .new-chat-modal .people-result small {
+    font-size: 9px;
+  }
+
+  .new-chat-modal .result-open {
+    padding: 7px;
+    font-size: 9px;
+  }
+}
+
+
+/* -----------------------------------------
+   12. SHORT SCREENS
+----------------------------------------- */
+
+@media (max-height: 560px) {
+  .modal-backdrop {
+    align-items: start;
+    padding-block: 8px;
+  }
+
+  .new-chat-modal {
+    max-height: calc(100dvh - 16px);
+    padding-block: 15px;
+  }
+
+  .new-chat-modal > p {
+    margin-block: 7px 12px;
+  }
+
+  .new-chat-modal .modal-search {
+    margin-bottom: 9px;
+  }
+}
+
+
+/* -----------------------------------------
+   13. ACCESSIBILITY
+----------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
   .new-chat-modal,
-  .new-chat-modal * {
+  .new-chat-modal *,
+  .new-chat-modal *::before,
+  .new-chat-modal *::after {
     transition: none !important;
     animation: none !important;
   }
 }
 
-.toast-message{position:fixed;z-index:50;left:50%;bottom:28px;display:flex;align-items:center;gap:10px;max-width:calc(100vw - 32px);padding:13px 18px;border:1px solid #ffffff22;border-radius:13px;color:white;background:#302b48;box-shadow:0 10px 30px #211b3c2c;font-size:12px;transform:translateX(-50%);animation:toastIn .2s ease both}@keyframes toastIn{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}.toast-message span{color:#c6bbff;font-size:17px}.inline-error{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 18px;color:#a54151;background:#fff0f1;border-bottom:1px solid #f9d8dc;font-size:11px}.inline-error button{display:grid;place-items:center;border:0;color:inherit;background:transparent}.loading-messages{display:flex;justify-content:center;align-items:center;gap:9px;margin:auto;color:#9996aa;font-size:12px}.empty-chat-panel{display:flex;align-items:center;justify-content:center;flex-direction:column;flex:1;padding:25px;text-align:center}.empty-chat-panel h2{margin:18px 0 8px;font:800 19px 'Manrope',sans-serif}.empty-chat-panel p{max-width:300px;color:#9996aa;font-size:12px;line-height:1.6}.create-chat-submit{display:flex;align-items:center;justify-content:center;gap:8px;min-height:43px;margin-top:15px;padding:0 18px;border:0;border-radius:11px;color:white;background:var(--purple);font-size:12px;font-weight:700}.create-chat-submit:hover{background:var(--purple-dark)}
-.full-loading{min-height:100vh;display:flex;align-items:center;justify-content:center;gap:12px;color:#89859e;font-size:13px}.spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
 
+/* =====================================================
+   OTHER GLOBAL UI ELEMENTS
+===================================================== */
+
+/* -----------------------------------------
+   14. TOAST NOTIFICATION
+----------------------------------------- */
+
+.toast-message {
+  position: fixed;
+  z-index: 1050;
+
+  left: 50%;
+  bottom: max(28px, env(safe-area-inset-bottom));
+
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  width: max-content;
+  max-width: calc(100vw - 32px);
+
+  padding: 13px 18px;
+
+  border: 1px solid #ffffff22;
+  border-radius: 13px;
+
+  color: white;
+  background: #302b48;
+
+  box-shadow: 0 10px 30px #211b3c2c;
+
+  font-size: 12px;
+
+  transform: translateX(-50%);
+
+  animation: toastIn 0.2s ease both;
+}
+
+.toast-message span {
+  color: #c6bbff;
+  font-size: 17px;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+
+/* -----------------------------------------
+   15. INLINE ERROR
+----------------------------------------- */
+
+.inline-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 10px;
+  padding: 9px 18px;
+
+  color: #a54151;
+  background: #fff0f1;
+
+  border-bottom: 1px solid #f9d8dc;
+
+  font-size: 11px;
+}
+
+.inline-error button {
+  display: grid;
+  place-items: center;
+
+  border: 0;
+  color: inherit;
+  background: transparent;
+
+  cursor: pointer;
+}
+
+
+/* -----------------------------------------
+   16. LOADING MESSAGES
+----------------------------------------- */
+
+.loading-messages {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  gap: 9px;
+  margin: auto;
+
+  color: #9996aa;
+  font-size: 12px;
+}
+
+
+/* -----------------------------------------
+   17. EMPTY CHAT PANEL
+----------------------------------------- */
+
+.empty-chat-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+
+  flex: 1;
+  min-width: 0;
+
+  padding: 25px;
+
+  text-align: center;
+}
+
+.empty-chat-panel h2 {
+  margin: 18px 0 8px;
+
+  font: 800 19px 'Manrope', sans-serif;
+}
+
+.empty-chat-panel p {
+  max-width: 300px;
+
+  color: #9996aa;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+
+/* -----------------------------------------
+   18. CREATE CHAT BUTTON
+----------------------------------------- */
+
+.create-chat-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  min-height: 43px;
+  margin-top: 15px;
+  padding: 0 18px;
+
+  border: 0;
+  border-radius: 11px;
+
+  color: white;
+  background: var(--purple);
+
+  font-size: 12px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition: background 0.2s;
+}
+
+.create-chat-submit:hover {
+  background: var(--purple-dark);
+}
+
+
+/* -----------------------------------------
+   19. LOADING SPINNER
+----------------------------------------- */
+
+.full-loading {
+  min-height: 100vh;
+  min-height: 100dvh;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 12px;
+
+  color: #89859e;
+  font-size: 13px;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+/* -----------------------------------------
+   20. REDUCED MOTION
+----------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-message,
+  .spin {
+    animation: none !important;
+  }
+
+  .toast-message {
+    transform: translateX(-50%);
+  }
+}

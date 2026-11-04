@@ -10,6 +10,7 @@ export function registerGroupMessageEdit(io, socket) {
     try {
       const { messageId, text } = payload || {};
 
+      // 1. Validate message ID.
       if (!mongoose.isValidObjectId(messageId)) {
         return callback?.({
           ok: false,
@@ -17,28 +18,46 @@ export function registerGroupMessageEdit(io, socket) {
         });
       }
 
+      // 2. Validate message text.
       const cleanText =
         typeof text === "string" ? text.trim() : "";
 
-      if (!cleanText || cleanText.length > 4000) {
+      if (cleanText.length > 4000) {
         return callback?.({
           ok: false,
-          message: "Message must contain 1–4000 characters.",
+          message: "Message cannot exceed 4000 characters.",
         });
       }
 
-      const message = await GroupMessage.findOne({
-        _id: messageId,
-        sender: userId,
-      });
+const message = await GroupMessage.findById(messageId);
 
-      if (!message || message.isDeleted) {
-        return callback?.({
-          ok: false,
-          message: "Message not found or cannot be edited.",
-        });
-      }
+console.log("===== MESSAGE EDIT CHECK =====");
+console.log("Message ID:", messageId);
+console.log("Authenticated user:", userId);
+console.log("Message exists:", Boolean(message));
 
+if (message) {
+  console.log("Message sender:", message.sender?.toString());
+  console.log("Sender matches:",
+    message.sender?.toString() === userId.toString()
+  );
+  console.log("Is deleted:", message.isDeleted);
+}
+
+console.log("==============================");
+
+if (
+  !message ||
+  message.isDeleted ||
+  message.sender?.toString() !== userId.toString()
+) {
+  return callback?.({
+    ok: false,
+    message: "Message not found or cannot be edited.",
+  });
+}
+
+      // 4. Confirm the user is still a group member.
       const group = await Group.findOne({
         _id: message.group,
         members: userId,
@@ -51,14 +70,26 @@ export function registerGroupMessageEdit(io, socket) {
         });
       }
 
+      // 5. Ensure the message still has content.
+      const hasAttachment = Boolean(message.attachment?.url);
+
+      if (!cleanText && !hasAttachment) {
+        return callback?.({
+          ok: false,
+          message: "Message must contain text or an attachment.",
+        });
+      }
+
+      // 6. Update message text.
       message.text = cleanText;
       await message.save();
 
+      // 7. Format updated message.
       const updatedMessage = {
         id: message._id.toString(),
         groupId: group._id.toString(),
-        senderId: userId,
-        senderName: socket.user.username,
+        senderId: message.sender.toString(),
+        senderName: socket.user.username || "User",
         text: message.text,
         attachment: message.attachment?.url
           ? message.attachment
@@ -68,6 +99,7 @@ export function registerGroupMessageEdit(io, socket) {
         edited: true,
       };
 
+      // 8. Broadcast updated message to all group members.
       for (const memberId of group.members) {
         io.to(`user:${memberId.toString()}`).emit(
           "group:message:edited",
@@ -75,6 +107,7 @@ export function registerGroupMessageEdit(io, socket) {
         );
       }
 
+      // 9. Return success.
       return callback?.({
         ok: true,
         message: updatedMessage,

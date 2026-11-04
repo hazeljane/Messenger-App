@@ -164,8 +164,10 @@ export default function App() {
   // =========================
 
   useConversationSettings({
+    user,
     activeChat,
     setChats,
+    socket, 
   });
 
   useMessageSocketEvents({

@@ -40,7 +40,6 @@ export function registerPrivateMessageEdit(io, socket) {
           message: "Message not found or cannot be edited.",
         });
       }
-
       // Update the message.
       message.text = cleanText;
       await message.save();

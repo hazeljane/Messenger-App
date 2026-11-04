@@ -10,7 +10,7 @@ import {
   UserRound,
 } from "lucide-react";
 import "./CallModal.css";
-
+import useCallSounds from "../hooks/useCallSounds";
 export default function CallModal({
   call,
   localStream,
@@ -32,7 +32,12 @@ export default function CallModal({
   const remoteAudioRef = useRef(null);
 
   const isVideo = call?.callType === "video";
-
+useCallSounds({
+  call,
+  isIncoming,
+  isOutgoing,
+  connectionState,
+});
 useEffect(() => {
   const video = localVideoRef.current;
 

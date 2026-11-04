@@ -212,6 +212,7 @@ router.post("/:userId/reject", requireAuth, async (req, res, next) => {
     next(error);
   }
 });
+
 // Get shared private conversation settings
 router.get("/:userId/settings", requireAuth, async (req, res, next) => {
   try {
@@ -233,31 +234,34 @@ router.get("/:userId/settings", requireAuth, async (req, res, next) => {
         message: "User not found.",
       });
     }
-    const conversation = await requireAcceptedConversation(
-  userId,
-  req.user._id
-);
 
-if (!conversation) {
-  return res.status(403).json({
-    message: "You can only access settings for accepted conversations.",
-  });
-}
+    const conversation = await requireAcceptedConversation(
+      userId,
+      req.user._id
+    );
+
+    if (!conversation) {
+      return res.status(403).json({
+        message: "You can only access settings for accepted conversations.",
+      });
+    }
+
     const key = conversationKey(req.user._id, otherUser._id);
 
+    // Both participants read the same settings document.
     const settings = await ConversationSettings.findOne({
       conversationKey: key,
-      userId: req.user._id,
     }).lean();
 
-
     return res.json({
+      conversationKey: key,
       background: settings?.background || "default",
     });
   } catch (error) {
     next(error);
   }
 });
+
 
 // Block a private conversation
 router.post("/:userId/block", requireAuth, async (req, res, next) => {
@@ -392,8 +396,6 @@ router.delete("/:userId/request", requireAuth, async (req, res, next) => {
     next(error);
   }
 });
-
-// Change personal private conversation background
 router.patch("/:userId/settings", requireAuth, async (req, res, next) => {
   try {
     const { userId } = req.params;
@@ -435,19 +437,12 @@ router.patch("/:userId/settings", requireAuth, async (req, res, next) => {
 
     const key = conversationKey(req.user._id, otherUser._id);
 
+    // One shared settings document for both participants.
     const settings = await ConversationSettings.findOneAndUpdate(
+      { conversationKey: key },
       {
-        conversationKey: key,
-        userId: req.user._id,
-      },
-      {
-        $set: {
-          background,
-        },
-        $setOnInsert: {
-          conversationKey: key,
-          userId: req.user._id,
-        },
+        $set: { background },
+        $setOnInsert: { conversationKey: key },
       },
       {
         new: true,
@@ -461,16 +456,18 @@ router.patch("/:userId/settings", requireAuth, async (req, res, next) => {
       background: settings.background,
     };
 
-    // Notify only the user who changed their personal background.
     const io = req.app.get("io");
 
-    io?.to(`user:${req.user._id}`).emit(
-      "conversation:background:updated",
-      update
-    );
+    // Notify BOTH participants.
+    for (const participantId of conversation.participants) {
+      io?.to(`user:${participantId}`).emit(
+        "conversation:background:updated",
+        update
+      );
+    }
 
     return res.json({
-      message: "Your conversation background was updated.",
+      message: "Shared conversation background updated.",
       ...update,
     });
   } catch (error) {

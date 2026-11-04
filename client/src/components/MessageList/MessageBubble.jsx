@@ -186,7 +186,7 @@ export default function MessageBubble({
                             saveEditedMessage(message)
                           }
                           disabled={
-                            savingEdit || !editDraft.trim()
+                            savingEdit || (!editDraft.trim() &&  !attachment)
                           }
                         >
                           <SaveIcon size={15} />

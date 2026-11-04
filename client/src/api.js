@@ -60,10 +60,16 @@ export const api = {
     }),
 
   // Private conversation settings
-  getConversationSettings: (userId) =>
-    request(
-      `/api/conversations/${encodeURIComponent(userId)}/settings`
-    ),
+
+  // Private conversation settings
+  getConversationSettings: (id, { isGroup = false } = {}) =>
+    isGroup
+      ? request(
+          `/api/groups/${encodeURIComponent(id)}/background`
+        )
+      : request(
+          `/api/conversations/${encodeURIComponent(id)}/settings`
+        ),
 
   updateConversationBackground: (userId, background) =>
     request(
@@ -83,6 +89,8 @@ export const api = {
         body: JSON.stringify({ background }),
       }
     ),
+
+
 
   // Authentication
   me: () => request("/api/auth/me"),

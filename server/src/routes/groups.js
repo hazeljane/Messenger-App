@@ -398,4 +398,39 @@ router.patch("/:groupId/background", requireAuth, async (req, res, next) => {
     next(error);
   }
 });
+
+// Get a group's saved background
+router.get("/:groupId/background", requireAuth, async (req, res, next) => {
+  try {
+    const { groupId } = req.params;
+
+    // Validate group ID
+    if (!mongoose.isValidObjectId(groupId)) {
+      return res.status(400).json({
+        message: "Invalid group ID.",
+      });
+    }
+
+    // Find the group and verify membership
+    const group = await Group.findOne({
+      _id: groupId,
+      members: req.user._id,
+    }).select("_id background");
+
+    if (!group) {
+      return res.status(404).json({
+        message: "Group not found or you are not a member.",
+      });
+    }
+
+    // Return the saved background
+    return res.json({
+      groupId: group._id.toString(),
+      background: group.background || "default",
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

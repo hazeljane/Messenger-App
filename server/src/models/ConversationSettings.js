@@ -1,4 +1,3 @@
-
 import mongoose from "mongoose";
 
 const conversationSettingsSchema = new mongoose.Schema(
@@ -6,11 +5,7 @@ const conversationSettingsSchema = new mongoose.Schema(
     conversationKey: {
       type: String,
       required: true,
-    },
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
+      unique: true,
     },
     background: {
       type: String,
@@ -30,11 +25,6 @@ const conversationSettingsSchema = new mongoose.Schema(
     },
   },
   { timestamps: true }
-);
-
-conversationSettingsSchema.index(
-  { conversationKey: 1, userId: 1 },
-  { unique: true }
 );
 
 export default mongoose.model(
