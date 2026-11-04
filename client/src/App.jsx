@@ -246,7 +246,27 @@ const loadMessageRequests = useCallback(async () => {
 
     loadMessageRequests();
   }, [user, loadMessageRequests]);
+ useEffect(() => {
+    const unlockAudio = async () => {
+      const audio = new Audio("/sounds/incoming-ringtone.mp3");
+      audio.volume = 0;
 
+      try {
+        await audio.play();
+        audio.pause();
+        audio.currentTime = 0;
+        console.log("Audio unlocked successfully.");
+      } catch (error) {
+        console.warn("Audio unlock failed:", error);
+      }
+    };
+
+    window.addEventListener("pointerdown", unlockAudio, { once: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio);
+    };
+  }, []);
   // Refresh requests when a new private message arrives.
   useEffect(() => {
     if (!socket) return;

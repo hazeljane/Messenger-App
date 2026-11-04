@@ -1,5 +1,5 @@
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 
 export default function useCallSounds({
   call,
@@ -9,14 +9,30 @@ export default function useCallSounds({
 }) {
   const ringtoneRef = useRef(null);
 
+  const stopRingtone = useCallback(() => {
+    const ringtone = ringtoneRef.current;
+
+    if (!ringtone) return;
+
+    ringtone.pause();
+    ringtone.currentTime = 0;
+    ringtoneRef.current = null;
+  }, []);
+
   useEffect(() => {
-    if (!call) return;
+    if (!call) {
+      stopRingtone();
+      return;
+    }
 
     const shouldRing =
       (isIncoming || isOutgoing) &&
       connectionState !== "connected";
 
-    if (!shouldRing) return;
+    if (!shouldRing) {
+      stopRingtone();
+      return;
+    }
 
     const ringtone = new Audio(
       isIncoming
@@ -26,28 +42,30 @@ export default function useCallSounds({
 
     ringtone.loop = true;
     ringtone.volume = 0.7;
-
     ringtoneRef.current = ringtone;
 
     ringtone.play().catch((error) => {
       console.warn("Ringtone playback failed:", error);
+      console.warn(
+        "Check browser audio permissions and MP3 file paths."
+      );
     });
 
     return () => {
       ringtone.pause();
       ringtone.currentTime = 0;
-      ringtoneRef.current = null;
+
+      if (ringtoneRef.current === ringtone) {
+        ringtoneRef.current = null;
+      }
     };
-  }, [call, isIncoming, isOutgoing, connectionState]);
-
-  // Stop ringtone manually if needed
-  const stopRingtone = () => {
-    if (!ringtoneRef.current) return;
-
-    ringtoneRef.current.pause();
-    ringtoneRef.current.currentTime = 0;
-    ringtoneRef.current = null;
-  };
+  }, [
+    call,
+    isIncoming,
+    isOutgoing,
+    connectionState,
+    stopRingtone,
+  ]);
 
   return { stopRingtone };
 }
