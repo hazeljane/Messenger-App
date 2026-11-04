@@ -19,6 +19,7 @@ export default function useConversationSettings({
 
     if (
       !isGroup &&
+      activeChat.conversationStatus &&
       activeChat.conversationStatus !== "accepted"
     ) {
       return;
@@ -86,46 +87,43 @@ export default function useConversationSettings({
 
     const currentUserId = String(user._id || user.id);
 
-    function handleBackgroundUpdated(update) {
-      if (!update?.participantIds || !update?.background) {
-        return;
+function handleBackgroundUpdated(update) {
+  if (!update?.participantIds || !update?.background) {
+    return;
+  }
+
+  const participants = update.participantIds.map(String);
+
+  if (!participants.includes(currentUserId)) {
+    return;
+  }
+
+  const otherUserId = participants.find(
+    (id) => id !== currentUserId
+  );
+
+  if (!otherUserId) return;
+
+  setChats((previous) =>
+    previous.map((chat) => {
+      if (chat.isGroup) return chat;
+
+      const chatId = String(chat.id || chat._id || "");
+
+      if (
+        chatId === otherUserId ||
+        chat.conversationKey === update.conversationKey
+      ) {
+        return {
+          ...chat,
+          background: update.background,
+        };
       }
 
-      const participants = update.participantIds.map(String);
-
-      // Make sure this user belongs to the conversation.
-      if (!participants.includes(currentUserId)) {
-        return;
-      }
-
-      // Find the other participant.
-      const otherUserId = participants.find(
-        (id) => id !== currentUserId
-      );
-
-      if (!otherUserId) return;
-
-      setChats((previous) =>
-        previous.map((chat) => {
-          if (chat.isGroup) return chat;
-
-          const chatId = String(chat.id || chat._id || "");
-
-          // Match the private conversation by the other user's ID.
-          if (
-            chatId === otherUserId ||
-            chat.conversationKey === update.conversationKey
-          ) {
-            return {
-              ...chat,
-              background: update.background,
-            };
-          }
-
-          return chat;
-        })
-      );
-    }
+      return chat;
+    })
+  );
+}
 
     socket.on(
       "conversation:background:updated",

@@ -451,10 +451,13 @@ router.patch("/:userId/settings", requireAuth, async (req, res, next) => {
       }
     );
 
-    const update = {
-      conversationKey: key,
-      background: settings.background,
-    };
+const update = {
+  conversationKey: key,
+  background: settings.background,
+  participantIds: conversation.participants.map((id) =>
+    String(id)
+  ),
+};
 
     const io = req.app.get("io");
 
