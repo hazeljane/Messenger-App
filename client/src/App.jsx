@@ -35,7 +35,7 @@ import {
 } from "./utils/pushNotifications";
 
 import { api, connectSocket } from "./api.js";
-import { sameId } from "./utils/chatHelpers.js";
+import { sameId } from "../services/chatHelpers.js";
 
 import useMessageActions from "./hooks/useMessageActions.js";
 import useChatMessages from "./hooks/useChatMessages.js";

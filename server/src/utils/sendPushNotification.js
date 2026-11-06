@@ -1,6 +1,6 @@
 
-import { firebaseMessaging } from "../../../server/src/firebase.js";
-import User from "../../../server/src/models/User.js";
+import { firebaseMessaging } from "../firebase.js";
+import User from "../models/User.js";
 
 const INVALID_TOKEN_CODES = new Set([
   "messaging/invalid-registration-token",
