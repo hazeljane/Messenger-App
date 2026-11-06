@@ -3,7 +3,11 @@ import mongoose from "mongoose";
 import Message from "../models/Message.js";
 import User from "../models/User.js";
 import Conversation from "../models/Conversation.js";
+import { sendPushNotification } from "../../../client/src/utils/sendPushNotification.js";
 
+// ==========================================
+// CREATE PRIVATE CONVERSATION KEY
+// ==========================================
 function createConversationKey(userA, userB) {
   return [userA.toString(), userB.toString()]
     .sort()
@@ -22,7 +26,9 @@ export function registerPrivateMessageHandlers(io, socket) {
         replyTo,
       } = payload || {};
 
-      // Validate recipient ID.
+      // ==========================================
+      // VALIDATE RECIPIENT
+      // ==========================================
       if (!mongoose.isValidObjectId(recipientId)) {
         return callback?.({
           ok: false,
@@ -37,10 +43,12 @@ export function registerPrivateMessageHandlers(io, socket) {
         });
       }
 
+      // ==========================================
+      // VALIDATE MESSAGE
+      // ==========================================
       const cleanText =
         typeof text === "string" ? text.trim() : "";
 
-      // Validate attachment.
       const validAttachment =
         attachment &&
         typeof attachment.url === "string" &&
@@ -61,22 +69,24 @@ export function registerPrivateMessageHandlers(io, socket) {
         });
       }
 
-      // Check the sender's current permission in MongoDB.
+      // ==========================================
+      // FIND SENDER
+      // ==========================================
       const sender = await User.findById(userId)
         .select("_id username");
 
-      if (!sender) 
-       {
+      if (!sender) {
         return callback?.({
           ok: false,
-          message:
-            "Sender not found.",
+          message: "Sender not found.",
         });
       }
 
-      // Confirm that the recipient exists.
+      // ==========================================
+      // FIND RECIPIENT
+      // ==========================================
       const recipient = await User.findById(recipientId)
-        .select("_id username");
+        .select("_id username fcmTokens");
 
       if (!recipient) {
         return callback?.({
@@ -85,93 +95,107 @@ export function registerPrivateMessageHandlers(io, socket) {
         });
       }
 
+      // ==========================================
+      // FIND OR CREATE CONVERSATION
+      // ==========================================
       const key = createConversationKey(
         sender._id,
         recipient._id
       );
-let conversation = await Conversation.findOne({
-  conversationKey: key,
-});
 
-if (!conversation) {
-  const existingMessage = await Message.exists({
-    conversationKey: key,
-  });
+      let conversation = await Conversation.findOne({
+        conversationKey: key,
+      });
 
-  try {
-    conversation = await Conversation.create({
-      conversationKey: key,
-      participants: [sender._id, recipient._id],
-      requestedBy: sender._id,
-      status: existingMessage ? "accepted" : "pending",
-      acceptedAt: existingMessage ? new Date() : null,
-    });
-  } catch (error) {
-    if (error.code !== 11000) {
-      throw error;
-    }
+      if (!conversation) {
+        const existingMessage = await Message.exists({
+          conversationKey: key,
+        });
 
-    conversation = await Conversation.findOne({
-      conversationKey: key,
-    });
-  }
-}
+        try {
+          conversation = await Conversation.create({
+            conversationKey: key,
+            participants: [sender._id, recipient._id],
+            requestedBy: sender._id,
+            status: existingMessage ? "accepted" : "pending",
+            acceptedAt: existingMessage ? new Date() : null,
+          });
+        } catch (error) {
+          if (error.code !== 11000) {
+            throw error;
+          }
 
-if (!conversation) {
-  throw new Error("Could not create or load conversation.");
-}
+          conversation = await Conversation.findOne({
+            conversationKey: key,
+          });
+        }
+      }
 
-// Blocked conversations cannot receive messages.
-if (conversation.status === "blocked") {
-  return callback?.({
-    ok: false,
-    message: "You cannot send messages in this conversation.",
-  });
-}
+      if (!conversation) {
+        throw new Error(
+          "Could not create or load conversation."
+        );
+      }
 
-// Rejected requests cannot receive messages.
-if (conversation.status === "rejected") {
-  return callback?.({
-    ok: false,
-    message: "This message request was rejected.",
-  });
-}
+      // ==========================================
+      // CHECK CONVERSATION PERMISSIONS
+      // ==========================================
 
-// Only the original sender can send the initial request message.
-// Allow a retry if the initial message was not successfully saved.
-if (conversation.status === "pending") {
-  const isRequestSender =
-    String(conversation.requestedBy) === String(sender._id);
+      if (conversation.status === "blocked") {
+        return callback?.({
+          ok: false,
+          message: "You cannot send messages in this conversation.",
+        });
+      }
 
-  if (!isRequestSender) {
-    return callback?.({
-      ok: false,
-      message: "This message request is waiting for the recipient to accept.",
-    });
-  }
+      if (conversation.status === "rejected") {
+        return callback?.({
+          ok: false,
+          message: "This message request was rejected.",
+        });
+      }
 
-  const existingRequestMessage = await Message.exists({
-    conversationKey: key,
-  });
+      // ==========================================
+      // CHECK PENDING MESSAGE REQUEST
+      // ==========================================
+      if (conversation.status === "pending") {
+        const isRequestSender =
+          String(conversation.requestedBy) ===
+          String(sender._id);
 
-  if (existingRequestMessage) {
-    return callback?.({
-      ok: false,
-      message: "Your message request is waiting for the recipient to accept.",
-    });
-  }
-}
+        if (!isRequestSender) {
+          return callback?.({
+            ok: false,
+            message:
+              "This message request is waiting for the recipient to accept.",
+          });
+        }
 
-// Accepted conversations can exchange messages normally.
-if (
-  !["pending", "accepted"].includes(conversation.status)
-) {
-  return callback?.({
-    ok: false,
-    message: "This conversation is not available.",
-  });
-}
-      // Validate reply belongs to this conversation.
+        const existingRequestMessage = await Message.exists({
+          conversationKey: key,
+        });
+
+        if (existingRequestMessage) {
+          return callback?.({
+            ok: false,
+            message:
+              "Your message request is waiting for the recipient to accept.",
+          });
+        }
+      }
+
+      if (
+        !["pending", "accepted"].includes(conversation.status)
+      ) {
+        return callback?.({
+          ok: false,
+          message: "This conversation is not available.",
+        });
+      }
+
+      // ==========================================
+      // VALIDATE REPLY
+      // ==========================================
       let originalMessage = null;
 
       if (replyTo) {
@@ -196,13 +220,16 @@ if (
         }
       }
 
-      // Save private message.
+      // ==========================================
+      // SAVE PRIVATE MESSAGE
+      // ==========================================
       const savedMessage = await Message.create({
         conversationKey: key,
         sender: sender._id,
         recipient: recipient._id,
         replyTo: originalMessage?._id || null,
         text: cleanText,
+
         ...(validAttachment && {
           attachment: {
             url: attachment.url,
@@ -213,6 +240,9 @@ if (
         }),
       });
 
+      // ==========================================
+      // POPULATE MESSAGE
+      // ==========================================
       await savedMessage.populate([
         {
           path: "sender",
@@ -228,27 +258,40 @@ if (
         },
       ]);
 
-      // Format the message for the frontend.
+      // ==========================================
+      // FORMAT MESSAGE FOR FRONTEND
+      // ==========================================
       const message = {
         id: savedMessage._id.toString(),
+
         senderId: savedMessage.sender._id.toString(),
-        senderName: savedMessage.sender.username || "User",
+
+        senderName:
+          savedMessage.sender.username || "User",
+
         recipientId: recipient._id.toString(),
+
         text: savedMessage.text,
+
         attachment: savedMessage.attachment?.url
           ? savedMessage.attachment
           : null,
+
         createdAt: savedMessage.createdAt,
         updatedAt: savedMessage.updatedAt,
 
         replyTo: savedMessage.replyTo
           ? {
               id: savedMessage.replyTo._id.toString(),
+
               senderId:
                 savedMessage.replyTo.sender?._id?.toString(),
+
               senderName:
                 savedMessage.replyTo.sender?.username || "User",
+
               text: savedMessage.replyTo.text,
+
               attachment:
                 savedMessage.replyTo.attachment?.url
                   ? savedMessage.replyTo.attachment
@@ -257,21 +300,84 @@ if (
           : null,
       };
 
-      // Send to both participants.
+      // ==========================================
+      // EMIT MESSAGE TO BOTH PARTICIPANTS
+      // ==========================================
+
+      // Sender receives the message on their devices.
       io.to(`user:${sender._id.toString()}`).emit(
         "message:new",
         message
       );
 
+      // Recipient receives the message on their devices.
       io.to(`user:${recipient._id.toString()}`).emit(
         "message:new",
         message
       );
 
+      // ==========================================
+      // SEND FIREBASE PUSH NOTIFICATION
+      // ==========================================
+
+      // This runs AFTER the message is saved.
+      // The sender is never included as a recipient.
+      // Push delivery does not block message acknowledgment.
+
+      const isPendingRequest =
+        conversation.status === "pending";
+
+      const notificationBody = cleanText
+        ? cleanText.slice(0, 120)
+        : "Sent you an attachment";
+
+      void sendPushNotification(recipient, {
+        title: isPendingRequest
+          ? `New message request from ${sender.username}`
+          : `New message from ${sender.username}`,
+
+        body: notificationBody,
+
+        data: {
+          type: isPendingRequest
+            ? "message_request"
+            : "private_message",
+
+          senderId: sender._id.toString(),
+
+          conversationId: key,
+
+          messageId: savedMessage._id.toString(),
+        },
+      })
+        .then((result) => {
+          console.log("Private push result:", {
+            recipientId: recipient._id.toString(),
+            ...result,
+          });
+
+          if (!result.success) {
+            console.warn(
+              "Private push was not delivered:",
+              result.reason || "No successful device deliveries"
+            );
+          }
+        })
+        .catch((error) => {
+          console.error(
+            "Private push notification error:",
+            error
+          );
+        });
+
+      // ==========================================
+      // ACKNOWLEDGE SUCCESS
+      // ==========================================
       return callback?.({
         ok: true,
         message,
       });
+
     } catch (error) {
       console.error("Private message error:", error);
 

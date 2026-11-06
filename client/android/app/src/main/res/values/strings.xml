@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Chatterbox</string>
+    <string name="title_activity_main">Chatterbox</string>
+    <string name="package_name">com.hazeljane.chatterbox</string>
+    <string name="custom_url_scheme">com.hazeljane.chatterbox</string>
+</resources>

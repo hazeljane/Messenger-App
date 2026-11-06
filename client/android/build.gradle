@@ -1,0 +1,35 @@
+
+// Top-level build file
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        // Android Gradle Plugin
+        classpath 'com.android.tools.build:gradle:8.13.0'
+
+        // Kotlin Gradle Plugin
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.20'
+
+        // Google Services Plugin (Firebase)
+        classpath 'com.google.gms:google-services:4.4.4'
+    }
+}
+
+// Shared Android project variables
+apply from: "variables.gradle"
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+// Clean build task
+tasks.register("clean", Delete) {
+    delete rootProject.layout.buildDirectory
+}

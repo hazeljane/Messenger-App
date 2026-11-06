@@ -1,17 +1,10 @@
-
 import { io } from "socket.io-client";
 
-// =========================
-// API CONFIGURATION
-// =========================
+  export const API_URL = (
+    import.meta.env.VITE_API_URL || "http://localhost:5000"
+  ).replace(/\/+$/, "");
 
-export const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:5000"
-).replace(/\/$/, "");
-
-// =========================
-// API REQUEST HELPER
-// =========================
+console.log("API BASE URL:", API_URL);
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -46,7 +39,10 @@ async function request(path, options = {}) {
 // =========================
 
 export const api = {
-  // Account settings
+  // =========================
+  // ACCOUNT SETTINGS
+  // =========================
+
   updateTheme: (theme) =>
     request("/api/settings/theme", {
       method: "PATCH",
@@ -59,9 +55,10 @@ export const api = {
       body: JSON.stringify({ showActiveStatus }),
     }),
 
-  // Private conversation settings
+  // =========================
+  // PRIVATE CONVERSATION SETTINGS
+  // =========================
 
-  // Private conversation settings
   getConversationSettings: (id, { isGroup = false } = {}) =>
     isGroup
       ? request(
@@ -80,7 +77,10 @@ export const api = {
       }
     ),
 
-  // Group conversation settings
+  // =========================
+  // GROUP CONVERSATION SETTINGS
+  // =========================
+
   updateGroupBackground: (groupId, background) =>
     request(
       `/api/groups/${encodeURIComponent(groupId)}/background`,
@@ -90,9 +90,10 @@ export const api = {
       }
     ),
 
+  // =========================
+  // AUTHENTICATION
+  // =========================
 
-
-  // Authentication
   me: () => request("/api/auth/me"),
 
   signup: (payload) =>
@@ -112,39 +113,85 @@ export const api = {
       method: "POST",
     }),
 
-  // Users and private messages
+  // =========================
+  // USERS
+  // =========================
+
   users: (search = "") =>
-    request(`/api/users?search=${encodeURIComponent(search)}`),
+    request(
+      `/api/users?search=${encodeURIComponent(search)}`
+    ),
+
+  // =========================
+  // FIREBASE DEVICE REGISTRATION
+  // =========================
+
+  registerFcmToken: (token, platform = "android") =>
+    request("/api/users/fcm-token", {
+      method: "POST",
+      body: JSON.stringify({ token, platform }),
+    }),
+
+  removeFcmToken: (token) =>
+    request("/api/users/fcm-token", {
+      method: "DELETE",
+      body: JSON.stringify({ token }),
+    }),
+
+  // =========================
+  // PRIVATE MESSAGES
+  // =========================
 
   messages: (userId) =>
-    request(`/api/messages/${encodeURIComponent(userId)}`),
+    request(
+      `/api/messages/${encodeURIComponent(userId)}`
+    ),
 
-  // Private message requests
+  // =========================
+  // PRIVATE MESSAGE REQUESTS
+  // =========================
+
   getMessageRequests: () =>
     request("/api/conversations/requests"),
 
   acceptMessageRequest: (userId) =>
-    request(`/api/conversations/${encodeURIComponent(userId)}/accept`, {
-      method: "POST",
-    }),
+    request(
+      `/api/conversations/${encodeURIComponent(userId)}/accept`,
+      {
+        method: "POST",
+      }
+    ),
 
   rejectMessageRequest: (userId) =>
-    request(`/api/conversations/${encodeURIComponent(userId)}/reject`, {
-      method: "POST",
-    }),
+    request(
+      `/api/conversations/${encodeURIComponent(userId)}/reject`,
+      {
+        method: "POST",
+      }
+    ),
 
   deleteMessageRequest: (userId) =>
-    request(`/api/conversations/${encodeURIComponent(userId)}/request`, {
-      method: "DELETE",
-    }),
+    request(
+      `/api/conversations/${encodeURIComponent(userId)}/request`,
+      {
+        method: "DELETE",
+      }
+    ),
 
   blockConversation: (userId) =>
-    request(`/api/conversations/${encodeURIComponent(userId)}/block`, {
-      method: "POST",
-    }),
+    request(
+      `/api/conversations/${encodeURIComponent(userId)}/block`,
+      {
+        method: "POST",
+      }
+    ),
 
-  // Group chats
-  groups: () => request("/api/groups"),
+  // =========================
+  // GROUP CHATS
+  // =========================
+
+  groups: () =>
+    request("/api/groups"),
 
   createGroup: (payload) =>
     request("/api/groups", {
@@ -153,20 +200,31 @@ export const api = {
     }),
 
   addGroupMembers: (groupId, memberIds) =>
-    request(`/api/groups/${encodeURIComponent(groupId)}/members`, {
-      method: "PATCH",
-      body: JSON.stringify({ memberIds }),
-    }),
+    request(
+      `/api/groups/${encodeURIComponent(groupId)}/members`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ memberIds }),
+      }
+    ),
 
   deleteGroup: (groupId) =>
-    request(`/api/groups/${encodeURIComponent(groupId)}`, {
-      method: "DELETE",
-    }),
+    request(
+      `/api/groups/${encodeURIComponent(groupId)}`,
+      {
+        method: "DELETE",
+      }
+    ),
 
   groupMessages: (groupId) =>
-    request(`/api/groups/${encodeURIComponent(groupId)}/messages`),
+    request(
+      `/api/groups/${encodeURIComponent(groupId)}/messages`
+    ),
 
-  // File attachments
+  // =========================
+  // FILE ATTACHMENTS
+  // =========================
+
   uploadFile: async (formData) => {
     const response = await fetch(`${API_URL}/api/uploads`, {
       method: "POST",
@@ -177,12 +235,18 @@ export const api = {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error(data.message || "File upload failed.");
+      throw new Error(
+        data.message || "File upload failed."
+      );
     }
 
     return data;
   },
 };
+
+// =========================
+// SOCKET.IO CONNECTION
+// =========================
 
 export function connectSocket() {
   const socket = io(API_URL, {
@@ -196,10 +260,15 @@ export function connectSocket() {
   socket.on("connect", () => {
     console.log("Socket.IO connected:", socket.id);
   });
-socket.on("connect_error", (error) => {
-  console.error("Socket.IO connection error:", error.message);
-  console.error("Error details:", error);
-});
+
+  socket.on("connect_error", (error) => {
+    console.error(
+      "Socket.IO connection error:",
+      error.message
+    );
+
+    console.error("Error details:", error);
+  });
 
   socket.on("disconnect", (reason) => {
     console.log("Socket.IO disconnected:", reason);

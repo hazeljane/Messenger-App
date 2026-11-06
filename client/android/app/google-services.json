@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "588785537245",
+    "firebase_url": "https://authlogin-3f652-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "authlogin-3f652",
+    "storage_bucket": "authlogin-3f652.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:588785537245:android:598307cd2464430d560b34",
+        "android_client_info": {
+          "package_name": "com.hazeljane.chatterbox"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBNmlZouxeSYPK6Y6TASZ3oxdS76aBqnlA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

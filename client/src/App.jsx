@@ -28,6 +28,12 @@ import NotificationToasts from "./components/NotificationToasts.jsx";
 import CallModal from "./components/CallModal.jsx";
 import MessageRequestsModal from "./components/MessageRequestsModal.jsx";
 
+import {
+  registerPushNotifications,
+  unregisterPushNotifications,
+  setNotificationTapHandler,
+} from "./utils/pushNotifications";
+
 import { api, connectSocket } from "./api.js";
 import { sameId } from "./utils/chatHelpers.js";
 
@@ -143,6 +149,7 @@ export default function App() {
   // =========================
   // 10. REFS
   // =========================
+  const pushRegistrationUserRef = useRef(null);
 
   const bottomRef = useRef(null);
   const toastTimer = useRef(null);
@@ -151,6 +158,9 @@ export default function App() {
   const inputRef = useRef(null);
   const socketRef = useRef(null);
 
+  const pendingNotificationRef = useRef(null);
+  const chatsRef = useRef(chats);
+
   // =========================
   // 11. ACTIVE CHAT
   // =========================
@@ -158,6 +168,7 @@ export default function App() {
   const activeChat = chats.find((chat) =>
     sameId(chat.id, activeId)
   );
+
 
   // =========================
   // 12. CUSTOM HOOKS
@@ -208,7 +219,6 @@ export default function App() {
   // =========================
   // 14. MESSAGE REQUESTS
   // =========================
-
 const loadMessageRequests = useCallback(async () => {
   if (!user) return;
 
@@ -216,13 +226,7 @@ const loadMessageRequests = useCallback(async () => {
 
   try {
     const response = await api.getMessageRequests();
-
-    console.log("Message requests response:", response);
-    console.log("Requests:", response?.requests);
-
-    const requests = response?.requests || [];
-
-    setMessageRequests(requests);
+    setMessageRequests(response?.requests || []);
   } catch (err) {
     console.error("Could not load message requests:", err);
   } finally {
@@ -230,23 +234,81 @@ const loadMessageRequests = useCallback(async () => {
   }
 }, [user]);
 
-  // Load requests when the user opens the requests modal.
-  useEffect(() => {
-    if (!user || !showMessageRequests) return;
+// Keep the latest chats available for notification taps.
+useEffect(() => {
+  chatsRef.current = chats;
+}, [chats]);
 
-    loadMessageRequests();
-  }, [user, showMessageRequests, loadMessageRequests]);
+// Load when the user logs in.
+useEffect(() => {
+  if (!user) {
+    setMessageRequests([]);
+    return;
+  }
 
-  // Load requests when the user logs in.
-  useEffect(() => {
-    if (!user) {
-      setMessageRequests([]);
-      return;
+  loadMessageRequests();
+}, [user, loadMessageRequests]);
+
+// Refresh when the modal opens.
+useEffect(() => {
+  if (!user || !showMessageRequests) return;
+
+  loadMessageRequests();
+}, [user, showMessageRequests, loadMessageRequests]);
+
+useEffect(() => {
+  const userId = user?.id ?? user?._id ?? user?.userId;
+
+  if (!userId) {
+    pushRegistrationUserRef.current = null;
+    return;
+  }
+
+  const normalizedUserId = String(userId);
+
+  // Prevent duplicate registration for the same account.
+  if (pushRegistrationUserRef.current === normalizedUserId) {
+    return;
+  }
+
+  pushRegistrationUserRef.current = normalizedUserId;
+
+  let cancelled = false;
+
+  const register = async () => {
+    try {
+      await registerPushNotifications(normalizedUserId);
+
+      if (!cancelled) {
+        console.log("Push notifications registered for user.");
+      }
+    } catch (error) {
+      if (!cancelled) {
+        console.error(
+          "Push notification registration failed:",
+          error
+        );
+
+        // Allow another attempt if registration fails.
+        if (
+          pushRegistrationUserRef.current === normalizedUserId
+        ) {
+          pushRegistrationUserRef.current = null;
+        }
+      }
     }
+  };
 
-    loadMessageRequests();
-  }, [user, loadMessageRequests]);
+  register();
+
+  return () => {
+    cancelled = true;
+  };
+}, [user?.id, user?._id, user?.userId]);
+
+
  useEffect(() => {
+  
     const unlockAudio = async () => {
       const audio = new Audio("/sounds/incoming-ringtone.mp3");
       audio.volume = 0;
@@ -1116,42 +1178,166 @@ useEffect(() => {
     );
   }
 
-  // =========================
-  // 37. LOGOUT
-  // =========================
+// ==========================================
+// HANDLE PUSH NOTIFICATION TAPS
+// ==========================================
 
-  async function handleLogout() {
-    try {
-      await api.logout();
-    } catch {
-      // Clear the local UI even if the network is unavailable.
+const handleNotificationTap = useCallback(
+  (data) => {
+    if (!data || !user) {
+      pendingNotificationRef.current = data;
+      return;
     }
 
-    socketRef.current?.disconnect();
-    socketRef.current = null;
+    console.log("Handling notification:", data);
 
-    setSocket(null);
-    setUser(null);
+    // --------------------------------------
+    // PRIVATE MESSAGE REQUEST
+    // --------------------------------------
 
-    setChats([]);
-    setActiveId("");
+    if (data.type === "message_request") {
+      pendingNotificationRef.current = null;
 
-    setMessageRequests([]);
-    setShowMessageRequests(false);
+      setShowMessageRequests(true);
 
-    setMobileChatOpen(false);
-    setMenuOpen(false);
+      return;
+    }
 
-    setGroups([]);
-    setSelectedMemberIds([]);
-    setShowCreateGroup(false);
+    // --------------------------------------
+    // GROUP MESSAGE
+    // --------------------------------------
 
-    setActiveCall(null);
-    setIncomingCall(null);
-    setCallStatus("");
+    if (data.type === "group_message") {
+      const group = chatsRef.current.find(
+        (chat) =>
+          chat.isGroup &&
+          sameId(chat.id, data.groupId)
+      );
 
-    cleanupCall();
+      if (!group) {
+        pendingNotificationRef.current = data;
+        console.log("Waiting for group chat to load.");
+        return;
+      }
+
+      pendingNotificationRef.current = null;
+      selectChat(group);
+
+      return;
+    }
+
+    // --------------------------------------
+    // PRIVATE MESSAGE
+    // --------------------------------------
+
+    if (data.type === "private_message") {
+      const privateChat = chatsRef.current.find(
+        (chat) =>
+          !chat.isGroup &&
+          sameId(chat.id, data.senderId)
+      );
+
+      if (!privateChat) {
+        pendingNotificationRef.current = data;
+        console.log("Waiting for private chat to load.");
+        return;
+      }
+
+      pendingNotificationRef.current = null;
+      selectChat(privateChat);
+
+      return;
+    }
+
+    console.warn(
+      "Unknown notification type:",
+      data.type
+    );
+  },
+  [user, loadMessageRequests]
+);
+
+// Register the handler with pushNotifications.js.
+useEffect(() => {
+  setNotificationTapHandler(handleNotificationTap);
+
+  return () => {
+    setNotificationTapHandler(null);
+  };
+}, [handleNotificationTap]);
+
+
+useEffect(() => {
+  const pending = pendingNotificationRef.current;
+
+  if (!pending || !user) return;
+
+  handleNotificationTap(pending);
+}, [chats, user, handleNotificationTap]);
+
+
+// =========================
+// 37. LOG OUT
+// =========================
+
+
+async function handleLogout() {
+  // 1. Remove this device's FCM token before clearing the session.
+  try {
+    await unregisterPushNotifications();
+  } catch (error) {
+    console.error(
+      "FCM token cleanup failed:",
+      error.message
+    );
   }
+
+  // 2. Log out from the backend.
+  try {
+    await api.logout();
+  } catch (error) {
+    console.error("API logout failed:", error);
+  }
+
+  // 3. Reset push registration tracking.
+  pushRegistrationUserRef.current = null;
+
+  // 4. Disconnect Socket.IO.
+  socketRef.current?.disconnect();
+  socketRef.current = null;
+
+  setSocket(null);
+
+  // 5. Clear authenticated user and chat data.
+  setUser(null);
+  setChats([]);
+  setGroups([]);
+  setActiveId("");
+  setOnlineIds(new Set());
+
+  // 6. Clear notification data.
+  pendingNotificationRef.current = null;
+  setMessageRequests([]);
+  setShowMessageRequests(false);
+
+  // 7. Reset interface state.
+  setMobileChatOpen(false);
+  setMenuOpen(false);
+  setShowCreateGroup(false);
+  setSelectedMemberIds([]);
+  setGroupName("");
+
+  // 8. Reset call state.
+  cleanupCall();
+
+  setActiveCall(null);
+  setIncomingCall(null);
+  setCallStatus("");
+  setIsMuted(false);
+  setIsCameraOff(false);
+}
+
+
 
   // =========================
   // 38. CREATE GROUP

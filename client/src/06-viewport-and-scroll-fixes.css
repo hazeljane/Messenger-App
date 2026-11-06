@@ -69,21 +69,6 @@ body {
   scrollbar-color: #c9c9c9 transparent;
 }
 
-/* Chrome, Edge and Safari */
-
-.conversation-list::-webkit-scrollbar {
-  width: 5px;
-}
-
-.conversation-list::-webkit-scrollbar-thumb {
-  background: #c9c9c9;
-  border-radius: 20px;
-}
-
-.conversation-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
 
 /* -----------------------------------------
    3. CHAT PANEL

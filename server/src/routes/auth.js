@@ -8,8 +8,10 @@ import { requireAuth } from "../middleware/requireAuth.js";
 
 const router = Router();
 
-// Cookie settings for local development and production
-// Cookie settings for local development and production
+// ==========================================
+// COOKIE SETTINGS
+// ==========================================
+
 function cookieOptions() {
   return {
     httpOnly: true,
@@ -19,6 +21,10 @@ function cookieOptions() {
     path: "/",
   };
 }
+
+// ==========================================
+// PUBLIC USER DATA
+// ==========================================
 
 function publicUser(user) {
   return {
@@ -30,7 +36,10 @@ function publicUser(user) {
   };
 }
 
-// SIGN UP
+// ==========================================
+// SIGNUP
+// ==========================================
+
 router.post("/signup", async (req, res) => {
   try {
     const username = String(req.body.username || "").trim();
@@ -43,7 +52,10 @@ router.post("/signup", async (req, res) => {
       });
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      email.length > 254
+    ) {
       return res.status(400).json({
         message: "Enter a valid email address.",
       });
@@ -51,7 +63,7 @@ router.post("/signup", async (req, res) => {
 
     if (password.length < 8 || password.length > 128) {
       return res.status(400).json({
-        message: "Password must be at least 8 characters.",
+        message: "Password must be between 8 and 128 characters.",
       });
     }
 
@@ -83,7 +95,11 @@ router.post("/signup", async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    res.cookie("chatterbox_session", token, cookieOptions());
+    res.cookie(
+      "chatterbox_session",
+      token,
+      cookieOptions()
+    );
 
     return res.status(201).json({
       user: publicUser(user),
@@ -103,10 +119,16 @@ router.post("/signup", async (req, res) => {
   }
 });
 
+// ==========================================
 // LOGIN
+// ==========================================
+
 router.post("/login", async (req, res) => {
   try {
-    const login = String(req.body.login || "").trim().toLowerCase();
+    const login = String(req.body.login || "")
+      .trim()
+      .toLowerCase();
+
     const password = String(req.body.password || "");
 
     if (!login || !password) {
@@ -116,15 +138,18 @@ router.post("/login", async (req, res) => {
     }
 
     const user = await User.findOne({
-  $or: [
-    { email: login },
-    { usernameLower: login },
-  ],
-}).select(
-  "+passwordHash username email usernameLower role theme"
-);
+      $or: [
+        { email: login },
+        { usernameLower: login },
+      ],
+    }).select(
+      "+passwordHash username email usernameLower role theme"
+    );
 
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    if (
+      !user ||
+      !(await bcrypt.compare(password, user.passwordHash))
+    ) {
       return res.status(401).json({
         message: "Incorrect username/email or password.",
       });
@@ -136,7 +161,11 @@ router.post("/login", async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    res.cookie("chatterbox_session", token, cookieOptions());
+    res.cookie(
+      "chatterbox_session",
+      token,
+      cookieOptions()
+    );
 
     return res.json({
       user: publicUser(user),
@@ -150,23 +179,32 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// ==========================================
 // CURRENT USER
+// ==========================================
+
 router.get("/me", requireAuth, (req, res) => {
-  res.json({
+  return res.json({
     user: publicUser(req.user),
   });
 });
 
+// ==========================================
 // LOGOUT
-router.post("/logout", (_req, res) => {
-  res.clearCookie("chatterbox_session", {
-    httpOnly: true,
-    secure: config.cookieSecure,
-    sameSite: config.cookieSameSite,
-    path: "/",
-  });
+// ==========================================
 
-  res.json({
+router.post("/logout", (_req, res) => {
+  res.clearCookie(
+    "chatterbox_session",
+    {
+      httpOnly: true,
+      secure: config.cookieSecure,
+      sameSite: config.cookieSameSite,
+      path: "/",
+    }
+  );
+
+  return res.json({
     message: "Logged out successfully.",
   });
 });

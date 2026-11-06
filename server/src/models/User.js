@@ -26,6 +26,26 @@ const userSchema = new mongoose.Schema(
       index: true,
       maxlength: 254,
     },
+    
+    // Firebase Cloud Messaging device tokens
+    fcmTokens: [
+      {
+        _id: false,
+        token: {
+          type: String,
+          required: true,
+        },
+        platform: {
+          type: String,
+          enum: ["android", "ios", "web"],
+          default: "android",
+        },
+        updatedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
 
     role: {
       type: String,
