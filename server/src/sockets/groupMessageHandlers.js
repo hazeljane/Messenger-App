@@ -191,10 +191,10 @@ export function registerGroupMessageHandlers(io, socket) {
       // ==========================================
       void (async () => {
         try {
-          const notificationRecipients = await User.find({
+const notificationRecipients = await User.find({
   _id: {
     $in: group.members,
-    $nin: [userId],
+    $ne: userId,
   },
 }).select("_id username fcmTokens");
 
@@ -217,15 +217,16 @@ export function registerGroupMessageHandlers(io, socket) {
                 },
               });
 
-              console.log("Group push result:", {
+             console.log("Group push result:", {
   recipientId: member._id.toString(),
-  ...result,
+  result,
 });
 
 if (!result.success) {
   console.warn("Group notification failed:", {
     username: member.username,
-    reason: result.reason || "No successful device deliveries",
+    reason:
+      result.reason || "No successful device deliveries",
   });
 }
 

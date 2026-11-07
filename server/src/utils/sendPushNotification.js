@@ -13,6 +13,7 @@ const RESERVED_DATA_KEYS = [
   /^google\./i,
   /^gcm\./i,
 ];
+
 export async function sendPushNotification(
   user,
   { title, body, data = {} } = {}
@@ -49,9 +50,9 @@ export async function sendPushNotification(
     // Collect unique device tokens.
     const tokens = [
       ...new Set(
-        (user.fcmTokens || [])
+        (Array.isArray(user.fcmTokens) ? user.fcmTokens : [])
           .map((item) =>
-            typeof item.token === "string"
+            typeof item?.token === "string"
               ? item.token.trim()
               : ""
           )
