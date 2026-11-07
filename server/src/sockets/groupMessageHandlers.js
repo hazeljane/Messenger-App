@@ -192,11 +192,11 @@ export function registerGroupMessageHandlers(io, socket) {
       void (async () => {
         try {
           const notificationRecipients = await User.find({
-            _id: {
-              $in: group.members,
-              $ne: userId,
-            },
-          }).select("_id username fcmTokens");
+  _id: {
+    $in: group.members,
+    $nin: [userId],
+  },
+}).select("_id username fcmTokens");
 
           const notificationBody = cleanText
             ? `${savedMessage.sender?.username || "Someone"}: ${cleanText.slice(0, 120)}`
@@ -218,17 +218,18 @@ export function registerGroupMessageHandlers(io, socket) {
               });
 
               console.log("Group push result:", {
-                recipientId: member._id.toString(),
-                ...result,
-              });
-              if (!result.success) {
-  console.warn(
-    "Group notification was not delivered:",
-    member.username,
-    result.reason || "No successful device deliveries"
-  );
+  recipientId: member._id.toString(),
+  ...result,
+});
+
+if (!result.success) {
+  console.warn("Group notification failed:", {
+    username: member.username,
+    reason: result.reason || "No successful device deliveries",
+  });
 }
-              return result;
+
+return result;
             })
           );
 

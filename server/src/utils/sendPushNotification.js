@@ -13,7 +13,6 @@ const RESERVED_DATA_KEYS = [
   /^google\./i,
   /^gcm\./i,
 ];
-
 export async function sendPushNotification(
   user,
   { title, body, data = {} } = {}
