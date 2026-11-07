@@ -1,10 +1,19 @@
+
 import { firebaseMessaging } from "../firebase.js";
 import User from "../models/User.js";
+
+// ==========================================
+// INVALID FCM TOKEN CODES
+// ==========================================
 
 const INVALID_TOKEN_CODES = new Set([
   "messaging/invalid-registration-token",
   "messaging/registration-token-not-registered",
 ]);
+
+// ==========================================
+// RESERVED FCM DATA KEYS
+// ==========================================
 
 const RESERVED_DATA_KEYS = [
   /^from$/i,
@@ -13,17 +22,29 @@ const RESERVED_DATA_KEYS = [
   /^gcm\./i,
 ];
 
+// ==========================================
+// SEND PUSH NOTIFICATION
+// ==========================================
+
 export async function sendPushNotification(
   user,
   { title, body, data = {} } = {}
 ) {
   try {
+    // ========================================
+    // VALIDATE USER
+    // ========================================
+
     if (!user?._id) {
       return {
         success: false,
         reason: "invalid-user",
       };
     }
+
+    // ========================================
+    // VALIDATE NOTIFICATION CONTENT
+    // ========================================
 
     if (
       typeof title !== "string" ||
@@ -37,8 +58,14 @@ export async function sendPushNotification(
       };
     }
 
+    // ========================================
+    // CHECK FIREBASE
+    // ========================================
+
     if (!firebaseMessaging) {
-      console.error("Firebase Messaging is not initialized.");
+      console.error(
+        "Firebase Messaging is not initialized."
+      );
 
       return {
         success: false,
@@ -46,7 +73,10 @@ export async function sendPushNotification(
       };
     }
 
-    // Collect unique device tokens.
+    // ========================================
+    // COLLECT UNIQUE DEVICE TOKENS
+    // ========================================
+
     const tokens = [
       ...new Set(
         (Array.isArray(user.fcmTokens) ? user.fcmTokens : [])
@@ -60,7 +90,10 @@ export async function sendPushNotification(
     ];
 
     if (!tokens.length) {
-      console.log("No FCM tokens for user:", user._id);
+      console.log(
+        "No FCM tokens for user:",
+        user._id.toString()
+      );
 
       return {
         success: false,
@@ -68,9 +101,14 @@ export async function sendPushNotification(
       };
     }
 
-    // FCM data values must be strings.
+    // ========================================
+    // VALIDATE FCM DATA
+    // ========================================
+
     const safeData =
-      data && typeof data === "object" && !Array.isArray(data)
+      data &&
+      typeof data === "object" &&
+      !Array.isArray(data)
         ? data
         : {};
 
@@ -89,10 +127,14 @@ export async function sendPushNotification(
         ])
     );
 
+    // ========================================
+    // SEND NOTIFICATIONS
+    // ========================================
+
     let successCount = 0;
     let failureCount = 0;
 
-    // FCM supports up to 500 tokens per multicast request.
+    // Firebase supports up to 500 tokens per batch.
     for (let i = 0; i < tokens.length; i += 500) {
       const batch = tokens.slice(i, i + 500);
 
@@ -120,20 +162,23 @@ export async function sendPushNotification(
       successCount += response.successCount;
       failureCount += response.failureCount;
 
+      // ======================================
+      // FIND INVALID TOKENS
+      // ======================================
+
       const invalidTokens = [];
 
       response.responses.forEach((result, index) => {
         if (result.success) {
           console.log(
             "FCM accepted notification for user:",
-            user._id
+            user._id.toString()
           );
         } else {
-          console.error(
-            "FCM delivery failed:",
-            result.error?.code,
-            result.error?.message
-          );
+          console.error("FCM delivery failed:", {
+            code: result.error?.code,
+            message: result.error?.message,
+          });
 
           if (
             INVALID_TOKEN_CODES.has(result.error?.code)
@@ -143,7 +188,10 @@ export async function sendPushNotification(
         }
       });
 
-      // Remove invalid tokens from MongoDB.
+      // ======================================
+      // REMOVE INVALID TOKENS
+      // ======================================
+
       if (invalidTokens.length) {
         try {
           await User.updateOne(
@@ -170,8 +218,12 @@ export async function sendPushNotification(
       }
     }
 
+    // ========================================
+    // FINAL RESULT
+    // ========================================
+
     console.log("FCM notification summary:", {
-      userId: user._id,
+      userId: user._id.toString(),
       successCount,
       failureCount,
     });
