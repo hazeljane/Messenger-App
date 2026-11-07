@@ -32,7 +32,8 @@ import {
   registerPushNotifications,
   unregisterPushNotifications,
   setNotificationTapHandler,
-} from "./services/pushNotifications";
+  initializePushNotifications,
+} from "./services/pushNotifications.js";
 
 import { api, connectSocket } from "./api.js";
 import { sameId } from "./utils/chatHelpers.js";
