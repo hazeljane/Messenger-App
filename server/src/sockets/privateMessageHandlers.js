@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import Message from "../models/Message.js";
 import User from "../models/User.js";
 import Conversation from "../models/Conversation.js";
-import { sendPushNotification } from "../../../client/src/utils/sendPushNotification.js";
+import { sendPushNotification } from "../utils/sendPushNotification.js";
 
 // ==========================================
 // CREATE PRIVATE CONVERSATION KEY
