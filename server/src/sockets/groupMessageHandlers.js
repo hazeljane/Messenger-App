@@ -1,3 +1,4 @@
+
 import mongoose from "mongoose";
 import Group from "../models/Group.js";
 import GroupMessage from "../models/GroupMessage.js";
@@ -19,6 +20,7 @@ export function registerGroupMessageHandlers(io, socket) {
       // ==========================================
       // VALIDATE GROUP ID
       // ==========================================
+
       if (!mongoose.isValidObjectId(groupId)) {
         return callback?.({
           ok: false,
@@ -29,6 +31,7 @@ export function registerGroupMessageHandlers(io, socket) {
       // ==========================================
       // VALIDATE MESSAGE
       // ==========================================
+
       const cleanText =
         typeof text === "string" ? text.trim() : "";
 
@@ -55,6 +58,7 @@ export function registerGroupMessageHandlers(io, socket) {
       // ==========================================
       // VERIFY GROUP MEMBERSHIP
       // ==========================================
+
       const group = await Group.findOne({
         _id: groupId,
         members: userId,
@@ -70,6 +74,7 @@ export function registerGroupMessageHandlers(io, socket) {
       // ==========================================
       // VALIDATE REPLY
       // ==========================================
+
       let originalMessage = null;
 
       if (replyTo) {
@@ -96,6 +101,7 @@ export function registerGroupMessageHandlers(io, socket) {
       // ==========================================
       // SAVE GROUP MESSAGE
       // ==========================================
+
       const savedMessage = await GroupMessage.create({
         group: group._id,
         sender: userId,
@@ -130,6 +136,7 @@ export function registerGroupMessageHandlers(io, socket) {
       // ==========================================
       // FORMAT MESSAGE
       // ==========================================
+
       const message = {
         id: savedMessage._id.toString(),
         groupId: group._id.toString(),
@@ -167,6 +174,7 @@ export function registerGroupMessageHandlers(io, socket) {
       // ==========================================
       // BROADCAST TO GROUP MEMBERS
       // ==========================================
+
       for (const memberId of group.members) {
         io.to(`user:${memberId.toString()}`).emit(
           "group:message:new",
@@ -177,6 +185,7 @@ export function registerGroupMessageHandlers(io, socket) {
       // ==========================================
       // FIND MENTIONED USERNAMES
       // ==========================================
+
       const mentionedUsernames = [
         ...new Set(
           [...cleanText.matchAll(/@([a-zA-Z0-9_.-]+)/g)]
@@ -188,18 +197,22 @@ export function registerGroupMessageHandlers(io, socket) {
       // SEND GROUP PUSH NOTIFICATIONS
       // EXCEPT THE SENDER
       // ==========================================
+
       void (async () => {
         try {
-const notificationRecipients = await User.find({
-  _id: {
-    $in: group.members,
-    $ne: userId,
-  },
-}).select("_id username fcmTokens");
+          const notificationRecipients = await User.find({
+            $and: [
+              { _id: { $in: group.members } },
+              { _id: { $ne: userId } },
+            ],
+          }).select("_id username fcmTokens");
+
+          const senderName =
+            savedMessage.sender?.username || "Someone";
 
           const notificationBody = cleanText
-            ? `${savedMessage.sender?.username || "Someone"}: ${cleanText.slice(0, 120)}`
-            : `${savedMessage.sender?.username || "Someone"} sent an attachment`;
+            ? `${senderName}: ${cleanText.slice(0, 120)}`
+            : `${senderName} sent an attachment`;
 
           const results = await Promise.allSettled(
             notificationRecipients.map(async (member) => {
@@ -216,33 +229,35 @@ const notificationRecipients = await User.find({
                 },
               });
 
-             console.log("Group push result:", {
-  recipientId: member._id.toString(),
-  result,
-});
+              if (result.success) {
+                console.log("Group push notification accepted:", {
+                  recipientId: member._id.toString(),
+                  successCount: result.successCount,
+                  failureCount: result.failureCount,
+                });
+              } else {
+                console.warn("Group push notification failed:", {
+                  recipientId: member._id.toString(),
+                  username: member.username,
+                  reason: result.reason || "Unknown error",
+                });
+              }
 
-if (!result.success) {
-  console.warn("Group notification failed:", {
-    username: member.username,
-    reason:
-      result.reason || "No successful device deliveries",
-  });
-}
-
-return result;
+              return result;
             })
           );
 
-          const failed = results.filter(
+          const rejected = results.filter(
             (result) => result.status === "rejected"
           );
 
-          if (failed.length) {
+          if (rejected.length > 0) {
             console.error(
-              "Some group push notifications failed:",
-              failed
+              "Some group push notification tasks failed:",
+              rejected
             );
           }
+
         } catch (error) {
           console.error(
             "Group push notification error:",
@@ -254,6 +269,7 @@ return result;
       // ==========================================
       // SEND MENTION NOTIFICATIONS
       // ==========================================
+
       if (mentionedUsernames.length > 0) {
         const members = await User.find({
           _id: { $in: group.members },
@@ -287,6 +303,7 @@ return result;
       // ==========================================
       // ACKNOWLEDGE SUCCESS
       // ==========================================
+
       return callback?.({
         ok: true,
         message,
