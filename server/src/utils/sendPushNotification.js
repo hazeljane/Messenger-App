@@ -1,4 +1,3 @@
-
 import { firebaseMessaging } from "../firebase.js";
 import User from "../models/User.js";
 
