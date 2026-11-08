@@ -1,6 +1,8 @@
 
 import { PushNotifications } from "@capacitor/push-notifications";
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
+const IncomingCallBridge = registerPlugin("IncomingCallBridge");
+
 import { api } from "../api";
 
 // ==========================================
@@ -40,6 +42,11 @@ const deliverNotificationTap = (data) => {
     console.error("Notification tap error:", error);
   }
 };
+export const clearPendingIncomingCallAction = async () => {
+  if (Capacitor.getPlatform() !== "android") return;
+
+  await IncomingCallBridge.clearPendingAction();
+};
 
 export const setNotificationTapHandler = (handler) => {
   notificationTapHandler =
@@ -51,7 +58,40 @@ export const setNotificationTapHandler = (handler) => {
     deliverNotificationTap(pending);
   }
 };
+// ==========================================
+// ANDROID INCOMING CALL BRIDGE
+// ==========================================
 
+const handleNativeIncomingCallAction = (event) => {
+  try {
+    let data = event?.detail;
+
+    // MainActivity sends the event data as a JSON string.
+    if (typeof data === "string") {
+      data = JSON.parse(data);
+    }
+
+    if (!data || typeof data !== "object") return;
+
+    const action = data.action || data.callAction;
+
+    if (!data.callId || !action) {
+      console.warn("Invalid Android incoming call action.");
+      return;
+    }
+
+    deliverNotificationTap({
+      ...data,
+      type: "incoming_call",
+      action,
+    });
+  } catch (error) {
+    console.error(
+      "Android incoming call action error:",
+      error
+    );
+  }
+};
 // ==========================================
 // REGISTER TOKEN WITH BACKEND
 // ==========================================
@@ -141,7 +181,34 @@ export const initializePushNotifications = async () => {
           }
         }
       );
+// Listen for native Android incoming-call actions.
+if (Capacitor.getPlatform() === "android") {
+  window.addEventListener(
+    "chatterboxIncomingCallAction",
+    handleNativeIncomingCallAction
+  );
 
+  // Recover an action saved before JavaScript was ready.
+  try {
+    const pendingAction =
+      await IncomingCallBridge.getPendingAction();
+
+    if (
+      pendingAction?.callId &&
+      pendingAction?.action
+    ) {
+      deliverNotificationTap({
+        ...pendingAction,
+        type: "incoming_call",
+      });
+    }
+  } catch (error) {
+    console.error(
+      "Could not recover pending Android call action:",
+      error
+    );
+  }
+}
       await PushNotifications.addListener(
         "registrationError",
         (error) => {

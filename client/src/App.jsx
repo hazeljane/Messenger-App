@@ -32,6 +32,7 @@ import {
   registerPushNotifications,
   unregisterPushNotifications,
   setNotificationTapHandler,
+  clearPendingIncomingCallAction,
 } from "./services/pushNotifications.js";
 
 import { api, connectSocket } from "./api.js";
@@ -161,6 +162,8 @@ export default function App() {
   const pendingNotificationRef = useRef(null);
   const chatsRef = useRef(chats);
 
+  const recoveringCallIdsRef = useRef(new Set());
+  const handledCallActionsRef = useRef(new Set());
   // =========================
   // 11. ACTIVE CHAT
   // =========================
@@ -626,16 +629,33 @@ const handleStartCall = async (chat, callType) => {
 // 21. ACCEPT INCOMING CALL
 // =========================
 
-async function handleAcceptIncoming() {
-  if (!incomingCall || !socketRef.current) return;
 
-  // Keep a stable reference while the async operation runs.
-  const call = incomingCall;
+async function handleAcceptIncoming(callOverride = null) {
+  const call = callOverride || incomingCall;
+  const currentSocket = socketRef.current;
+
+  console.log("ACCEPT CALL DEBUG:", {
+    callId: call?.callId,
+    callerId: call?.callerId,
+    callType: call?.callType,
+    hasOffer: Boolean(call?.offer),
+    offerType: call?.offer?.type,
+    hasSdp: Boolean(call?.offer?.sdp),
+    socketConnected: Boolean(currentSocket?.connected),
+  });
+
+  if (!call || !currentSocket?.connected) return false;
+
+  if (!call.offer?.sdp || call.offer.type !== "offer") {
+    console.error("Missing or invalid incoming WebRTC offer:", call);
+    setCallStatus("");
+    showNotice("Incoming call offer is missing. Please try again.");
+    return false;
+  }
 
   try {
     setCallStatus("Connecting...");
 
-    // 1. Create the WebRTC answer.
     const answer = await createAnswer(
       call.callerId,
       call.callId,
@@ -643,83 +663,78 @@ async function handleAcceptIncoming() {
       call.offer
     );
 
-    // 2. Tell the server that the call was accepted.
-    socketRef.current.emit(
-      "call:respond",
-      {
-        callerId: call.callerId,
-        callId: call.callId,
-        accepted: true,
-        answer,
-      },
-      (response) => {
-        if (!response?.ok) {
-          cleanupCall();
-
-          setIncomingCall(null);
-          setActiveCall(null);
-          setCallStatus("");
-
-          showNotice(
-            response?.message || "Could not accept the call."
-          );
-
-          return;
-        }
-
-        // 3. Save the active call.
-        setActiveCall({
+    const response = await new Promise((resolve) => {
+      currentSocket.emit(
+        "call:respond",
+        {
+          callerId: call.callerId,
           callId: call.callId,
-          recipientId: call.callerId,
-          callType: call.callType,
-          displayName:
-            call.displayName || "Chatterbox user",
-          status: "Connected",
-        });
+          accepted: true,
+          answer,
+        },
+        resolve
+      );
+    });
 
-        setIncomingCall(null);
-        setCallStatus("Connected");
-      }
-    );
+    if (!response?.ok) {
+      cleanupCall();
+      setIncomingCall(null);
+      setActiveCall(null);
+      setCallStatus("");
+      showNotice(response?.message || "Could not accept the call.");
+      return false;
+    }
+
+    setActiveCall({
+      callId: call.callId,
+      recipientId: call.callerId,
+      callType: call.callType,
+      displayName: call.displayName || "Chatterbox user",
+      status: "Connected",
+    });
+
+    setIncomingCall(null);
+    setCallStatus("Connected");
+
+    return true;
   } catch (err) {
     console.error("Could not accept call:", err);
 
     cleanupCall();
-
     setIncomingCall(null);
     setActiveCall(null);
     setCallStatus("");
 
-    showNotice(
-      err.message || "Could not accept the call."
-    );
+    showNotice(err.message || "Could not accept the call.");
+    return false;
   }
 }
+
 // =========================
 // 22. DECLINE INCOMING CALL
 // =========================
 
-function handleDeclineIncoming() {
-  if (!incomingCall || !socketRef.current) return;
+function handleDeclineIncoming(callOverride = null) {
+  const call = callOverride || incomingCall;
+  const currentSocket = socketRef.current;
 
-  const call = incomingCall;
+  if (!call || !currentSocket) return false;
 
-  // Notify the caller.
-  socketRef.current.emit("call:respond", {
+  currentSocket.emit("call:respond", {
     callerId: call.callerId,
     callId: call.callId,
     accepted: false,
   });
 
-  // Clean up local WebRTC resources.
   cleanupCall();
 
-  // Reset call states.
   setIncomingCall(null);
   setActiveCall(null);
   setCallStatus("");
   setIsMuted(false);
   setIsCameraOff(false);
+
+  return true;
 }
   // =========================
   // 23. MUTE AND CAMERA
@@ -1202,7 +1217,134 @@ const handleNotificationTap = useCallback(
 
       return;
     }
+// --------------------------------------
+// ANDROID INCOMING CALL
+// --------------------------------------
 
+if (data.type === "incoming_call") {
+  const callId = data.callId;
+
+  const nativeAction = data.action || data.callAction;
+
+  let action = "";
+
+  if (
+    nativeAction === "com.hazeljane.chatterbox.ANSWER_CALL" ||
+    nativeAction === "answer"
+  ) {
+    action = "answer";
+  } else if (
+    nativeAction === "com.hazeljane.chatterbox.DECLINE_CALL" ||
+    nativeAction === "decline"
+  ) {
+    action = "decline";
+  } else if (
+    nativeAction === "com.hazeljane.chatterbox.OPEN_INCOMING_CALL" ||
+    nativeAction === "open"
+  ) {
+    action = "open";
+  }
+
+  if (!callId || !action) {
+    console.warn("Invalid incoming-call notification action.");
+    return;
+  }
+
+  const currentSocket = socketRef.current;
+
+  // Wait until the authenticated socket is connected.
+  if (!currentSocket?.connected) {
+    pendingNotificationRef.current = data;
+    return;
+  }
+
+  const actionKey = `${callId}:${action}`;
+
+  // Ignore actions already handled.
+  if (handledCallActionsRef.current.has(actionKey)) {
+    pendingNotificationRef.current = null;
+    clearPendingIncomingCallAction().catch(console.error);
+    return;
+  }
+
+  // Avoid duplicate recovery requests.
+  if (recoveringCallIdsRef.current.has(callId)) {
+    return;
+  }
+
+  recoveringCallIdsRef.current.add(callId);
+
+  currentSocket.emit(
+    "call:recover",
+    { callId },
+    async (response) => {
+      try {
+        if (!response?.ok || !response.call) {
+          console.warn(
+            "Incoming call recovery failed:",
+            response?.message
+          );
+
+          pendingNotificationRef.current = null;
+
+          showNotice(
+            response?.message || "This call is no longer available."
+          );
+
+          await clearPendingIncomingCallAction();
+
+          return;
+        }
+
+        const recoveredCall = response.call;
+
+        const caller = chatsRef.current.find((chat) =>
+          sameId(chat.id, recoveredCall.callerId)
+        );
+
+        const call = {
+          ...recoveredCall,
+          displayName:
+            caller?.name ||
+            caller?.username ||
+            recoveredCall.callerName ||
+            "Chatterbox user",
+        };
+
+        pendingNotificationRef.current = null;
+
+        if (action === "answer") {
+          // Answer immediately using the recovered call.
+          const accepted = await handleAcceptIncoming(call);
+
+          if (!accepted) {
+            // Keep the call visible so the user can still
+            // answer manually if automatic answering fails.
+            setIncomingCall(call);
+          }
+        } else if (action === "decline") {
+          handleDeclineIncoming(call);
+        } else {
+          // OPEN: show the normal incoming-call interface.
+          setIncomingCall(call);
+        }
+
+        handledCallActionsRef.current.add(actionKey);
+
+        await clearPendingIncomingCallAction();
+      } catch (error) {
+        console.error(
+          "Android incoming-call handling failed:",
+          error
+        );
+      } finally {
+        recoveringCallIdsRef.current.delete(callId);
+      }
+    }
+  );
+
+  return;
+}
     // --------------------------------------
     // GROUP MESSAGE
     // --------------------------------------
@@ -1272,8 +1414,15 @@ useEffect(() => {
 
   if (!pending || !user) return;
 
+  if (
+    pending.type === "incoming_call" &&
+    !socket?.connected
+  ) {
+    return;
+  }
+
   handleNotificationTap(pending);
-}, [chats, user, handleNotificationTap]);
+}, [chats, user, socket, socketStatus, handleNotificationTap]);
 
 
 // =========================

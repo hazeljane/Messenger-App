@@ -1,0 +1,79 @@
+diff --git a/node_modules/@capacitor/push-notifications/android/.gradle/9.8.1/checksums/checksums.lock b/node_modules/@capacitor/push-notifications/android/.gradle/9.8.1/checksums/checksums.lock
+new file mode 100644
+index 0000000..c3d76b3
+Binary files /dev/null and b/node_modules/@capacitor/push-notifications/android/.gradle/9.8.1/checksums/checksums.lock differ
+diff --git a/node_modules/@capacitor/push-notifications/android/.gradle/9.8.1/fileChanges/last-build.bin b/node_modules/@capacitor/push-notifications/android/.gradle/9.8.1/fileChanges/last-build.bin
+new file mode 100644
+index 0000000..f76dd23
+Binary files /dev/null and b/node_modules/@capacitor/push-notifications/android/.gradle/9.8.1/fileChanges/last-build.bin differ
+diff --git a/node_modules/@capacitor/push-notifications/android/.gradle/9.8.1/fileHashes/fileHashes.bin b/node_modules/@capacitor/push-notifications/android/.gradle/9.8.1/fileHashes/fileHashes.bin
+new file mode 100644
+index 0000000..054c04a
+Binary files /dev/null and b/node_modules/@capacitor/push-notifications/android/.gradle/9.8.1/fileHashes/fileHashes.bin differ
+diff --git a/node_modules/@capacitor/push-notifications/android/.gradle/9.8.1/fileHashes/fileHashes.lock b/node_modules/@capacitor/push-notifications/android/.gradle/9.8.1/fileHashes/fileHashes.lock
+new file mode 100644
+index 0000000..bd679ba
+Binary files /dev/null and b/node_modules/@capacitor/push-notifications/android/.gradle/9.8.1/fileHashes/fileHashes.lock differ
+diff --git a/node_modules/@capacitor/push-notifications/android/.gradle/9.8.1/gc.properties b/node_modules/@capacitor/push-notifications/android/.gradle/9.8.1/gc.properties
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/@capacitor/push-notifications/android/.gradle/buildOutputCleanup/buildOutputCleanup.lock b/node_modules/@capacitor/push-notifications/android/.gradle/buildOutputCleanup/buildOutputCleanup.lock
+new file mode 100644
+index 0000000..b61b3e6
+Binary files /dev/null and b/node_modules/@capacitor/push-notifications/android/.gradle/buildOutputCleanup/buildOutputCleanup.lock differ
+diff --git a/node_modules/@capacitor/push-notifications/android/.gradle/buildOutputCleanup/cache.properties b/node_modules/@capacitor/push-notifications/android/.gradle/buildOutputCleanup/cache.properties
+new file mode 100644
+index 0000000..b9ae84c
+--- /dev/null
++++ b/node_modules/@capacitor/push-notifications/android/.gradle/buildOutputCleanup/cache.properties
+@@ -0,0 +1,2 @@
++#Thu Nov 05 10:32:00 CST 2026
++gradle.version=9.8.1
+diff --git a/node_modules/@capacitor/push-notifications/android/.gradle/vcs-1/gc.properties b/node_modules/@capacitor/push-notifications/android/.gradle/vcs-1/gc.properties
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/@capacitor/push-notifications/android/src/main/java/com/capacitorjs/plugins/pushnotifications/MessagingService.java b/node_modules/@capacitor/push-notifications/android/src/main/java/com/capacitorjs/plugins/pushnotifications/MessagingService.java
+index 55c4b2d..bf7184f 100644
+--- a/node_modules/@capacitor/push-notifications/android/src/main/java/com/capacitorjs/plugins/pushnotifications/MessagingService.java
++++ b/node_modules/@capacitor/push-notifications/android/src/main/java/com/capacitorjs/plugins/pushnotifications/MessagingService.java
+@@ -1,20 +1,37 @@
++
+ package com.capacitorjs.plugins.pushnotifications;
+ 
+ import androidx.annotation.NonNull;
++
+ import com.google.firebase.messaging.FirebaseMessagingService;
+ import com.google.firebase.messaging.RemoteMessage;
++import com.hazeljane.chatterbox.IncomingCallNotifications;
+ 
+ public class MessagingService extends FirebaseMessagingService {
+ 
+     @Override
+     public void onMessageReceived(@NonNull RemoteMessage remoteMessage) {
+         super.onMessageReceived(remoteMessage);
++
++        String messageType = remoteMessage.getData().get("type");
++
++        if ("incoming_call".equals(messageType)) {
++            IncomingCallNotifications.show(
++                    getApplicationContext(),
++                    remoteMessage
++            );
++            return;
++        }
++
++        // Preserve all existing Capacitor push notification handling.
+         PushNotificationsPlugin.sendRemoteMessage(remoteMessage);
+     }
+ 
+     @Override
+-    public void onNewToken(@NonNull String s) {
+-        super.onNewToken(s);
+-        PushNotificationsPlugin.onNewToken(s);
++    public void onNewToken(@NonNull String token) {
++        super.onNewToken(token);
++
++        // Preserve Capacitor token registration handling.
++        PushNotificationsPlugin.onNewToken(token);
+     }
+ }

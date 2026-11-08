@@ -6,7 +6,7 @@ import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { conversationKey } from "./messages.js";
-
+import Call from "../models/Call.js";
 const router = Router();
 
 const allowedBackgrounds = [
@@ -95,6 +95,55 @@ router.get("/requests", requireAuth, async (req, res, next) => {
     next(error);
   }
 });
+
+
+// Get pending incoming calls for the authenticated user.
+router.get("/calls/pending", requireAuth, async (req, res, next) => {
+  try {
+    const now = new Date();
+
+    // Expire any unanswered calls whose 45-second window has passed.
+    await Call.updateMany(
+      {
+        receiver: req.user._id,
+        status: "ringing",
+        expiresAt: { $lte: now },
+      },
+      {
+        $set: {
+          status: "missed",
+          endedAt: now,
+        },
+      }
+    );
+
+    // Retrieve unexpired incoming invitations.
+    const calls = await Call.find({
+      receiver: req.user._id,
+      status: "ringing",
+      expiresAt: { $gt: now },
+    })
+      .select("+offer")
+      .populate("caller", "_id username")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.json({
+      calls: calls.map((call) => ({
+        callId: call.callId,
+        callerId: String(call.caller._id),
+        callerName: call.caller.username,
+        callType: call.callType,
+        offer: call.offer,
+        expiresAt: call.expiresAt,
+        status: call.status,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Accept an incoming private message request
 router.post("/:userId/accept", requireAuth, async (req, res, next) => {
   try {

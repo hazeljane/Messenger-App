@@ -67,6 +67,8 @@ export const api = {
       : request(
           `/api/conversations/${encodeURIComponent(id)}/settings`
         ),
+  getPendingCalls: () =>
+    request("/api/conversations/calls/pending"),
 
   updateConversationBackground: (userId, background) =>
     request(

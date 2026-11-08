@@ -151,6 +151,43 @@ const io = new Server(server, {
   },
 
   maxHttpBufferSize: 1e6,
+
+  pingTimeout: 20000,
+  pingInterval: 25000,
+
+  connectTimeout: 45000,
+});
+
+// ==========================================
+// SOCKET.IO DIAGNOSTICS
+// ==========================================
+
+io.engine.on("connection_error", (error) => {
+  console.error("========== SOCKET.IO CONNECTION ERROR ==========");
+  console.error("Code:", error.code);
+  console.error("Message:", error.message);
+  console.error("Context:", error.context);
+  console.error("================================================");
+});
+
+io.on("connection", (socket) => {
+  console.log("Socket connected:", {
+    socketId: socket.id,
+    userId: socket.user?.id,
+    transport: socket.conn.transport.name,
+  });
+
+  socket.conn.on("upgrade", (transport) => {
+    console.log("Socket transport upgraded:", transport.name);
+  });
+
+  socket.on("disconnect", (reason) => {
+    console.log("Socket disconnected:", {
+      socketId: socket.id,
+      userId: socket.user?.id,
+      reason,
+    });
+  });
 });
 
 app.set("io", io);

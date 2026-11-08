@@ -1,4 +1,3 @@
-
 import {
   useCallback,
   useEffect,
@@ -22,10 +21,6 @@ const ICE_SERVERS = {
 // ============================================
 
 export default function useWebRTC(socket) {
-  // ------------------------------------------
-  // REFERENCES
-  // ------------------------------------------
-
   const peerRef = useRef(null);
 
   const localStreamRef = useRef(null);
@@ -41,12 +36,7 @@ export default function useWebRTC(socket) {
 
   const candidateQueueRef = useRef(Promise.resolve());
 
-  // Identifies the current call and prevents stale operations.
   const callGenerationRef = useRef(0);
-
-  // ------------------------------------------
-  // STATE
-  // ------------------------------------------
 
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
@@ -55,7 +45,7 @@ export default function useWebRTC(socket) {
   const [mediaError, setMediaError] = useState("");
 
   // ==========================================
-  // 3. STOP A STREAM
+  // 3. STOP STREAM
   // ==========================================
 
   const stopStream = useCallback((stream) => {
@@ -67,7 +57,7 @@ export default function useWebRTC(socket) {
   }, []);
 
   // ==========================================
-  // 4. GET LOCAL CAMERA AND MICROPHONE
+  // 4. GET LOCAL MEDIA
   // ==========================================
 
   const getLocalMedia = useCallback(async (callType) => {
@@ -115,7 +105,7 @@ export default function useWebRTC(socket) {
 
       if (error.name === "NotAllowedError") {
         message =
-          "Camera or microphone permission was denied. Allow access in your browser settings.";
+          "Camera or microphone permission was denied. Allow access in your device settings.";
       } else if (error.name === "NotFoundError") {
         message =
           "No camera or microphone was found on this device.";
@@ -133,41 +123,47 @@ export default function useWebRTC(socket) {
       throw new Error(message);
     }
   }, []);
-const addCandidate = useCallback((candidate) => {
-  candidateQueueRef.current = candidateQueueRef.current
-    .catch(() => {})
-    .then(async () => {
-      const peer = peerRef.current;
-
-      if (!peer || !peer.remoteDescription) {
-        pendingCandidatesRef.current.push(candidate);
-        return;
-      }
-
-      try {
-        await peer.addIceCandidate(
-          new RTCIceCandidate(candidate)
-        );
-
-        console.log("Remote ICE candidate added.");
-      } catch (error) {
-        console.error("Error adding remote ICE candidate:", error);
-      }
-    });
-
-  return candidateQueueRef.current;
-}, []);
 
   // ==========================================
-  // 6. FLUSH PENDING REMOTE CANDIDATES
+  // 5. ADD REMOTE ICE CANDIDATE
+  // ==========================================
+
+  const addCandidate = useCallback((candidate) => {
+    candidateQueueRef.current = candidateQueueRef.current
+      .catch(() => {})
+      .then(async () => {
+        const peer = peerRef.current;
+
+        if (!peer || !peer.remoteDescription) {
+          pendingCandidatesRef.current.push(candidate);
+          return;
+        }
+
+        try {
+          await peer.addIceCandidate(
+            new RTCIceCandidate(candidate)
+          );
+
+          console.log("Remote ICE candidate added.");
+        } catch (error) {
+          console.error(
+            "Error adding remote ICE candidate:",
+            error
+          );
+        }
+      });
+
+    return candidateQueueRef.current;
+  }, []);
+
+  // ==========================================
+  // 6. FLUSH REMOTE ICE CANDIDATES
   // ==========================================
 
   const flushPendingCandidates = useCallback(async () => {
     const peer = peerRef.current;
 
-    if (!peer || !peer.remoteDescription) {
-      return;
-    }
+    if (!peer || !peer.remoteDescription) return;
 
     const candidates = [...pendingCandidatesRef.current];
 
@@ -181,7 +177,7 @@ const addCandidate = useCallback((candidate) => {
   }, [addCandidate]);
 
   // ==========================================
-  // 7. SEND LOCAL ICE CANDIDATES
+  // 7. SEND LOCAL ICE CANDIDATE
   // ==========================================
 
   const sendLocalCandidate = useCallback(
@@ -209,9 +205,7 @@ const addCandidate = useCallback((candidate) => {
   const flushLocalCandidates = useCallback(() => {
     const { recipientId, callId } = callContextRef.current;
 
-    if (!socket || !recipientId || !callId) {
-      return;
-    }
+    if (!socket || !recipientId || !callId) return;
 
     const candidates = [...pendingLocalCandidatesRef.current];
 
@@ -225,7 +219,10 @@ const addCandidate = useCallback((candidate) => {
       });
     });
 
-    console.log("Pending local ICE candidates sent:", candidates.length);
+    console.log(
+      "Pending local ICE candidates sent:",
+      candidates.length
+    );
   }, [socket]);
 
   // ==========================================
@@ -234,61 +231,55 @@ const addCandidate = useCallback((candidate) => {
 
   const createPeerConnection = useCallback(() => {
     if (peerRef.current) {
-      return peerRef.current;
+      if (
+        peerRef.current.connectionState !== "closed"
+      ) {
+        throw new Error(
+          "A peer connection already exists. Clean up the previous call first."
+        );
+      }
+
+      peerRef.current = null;
     }
 
     const peer = new RTCPeerConnection(ICE_SERVERS);
 
     peerRef.current = peer;
 
-    // ------------------------------------------
-    // RECEIVE REMOTE AUDIO AND VIDEO
-    // ------------------------------------------
+    // RECEIVE REMOTE MEDIA
 
-peer.ontrack = (event) => {
-  if (peerRef.current !== peer) return;
+    peer.ontrack = (event) => {
+      if (peerRef.current !== peer) return;
 
-  let stream = remoteStreamRef.current;
+      let stream = remoteStreamRef.current;
 
-  // Prefer the stream provided by the browser.
-  if (event.streams?.[0]) {
-    stream = event.streams[0];
-  } else {
-    // Fallback: create a stream and add tracks manually.
-    if (!stream) {
-      stream = new MediaStream();
-    }
+      if (event.streams?.[0]) {
+        stream = event.streams[0];
+      } else {
+        if (!stream) {
+          stream = new MediaStream();
+        }
 
-    const alreadyAdded = stream
-      .getTracks()
-      .some((track) => track.id === event.track.id);
+        const alreadyAdded = stream
+          .getTracks()
+          .some((track) => track.id === event.track.id);
 
-    if (!alreadyAdded) {
-      stream.addTrack(event.track);
-    }
-  }
+        if (!alreadyAdded) {
+          stream.addTrack(event.track);
+        }
+      }
 
-  remoteStreamRef.current = stream;
-  setRemoteStream(stream);
+      remoteStreamRef.current = stream;
+      setRemoteStream(stream);
 
-  console.log("Remote track received:", {
-    kind: event.track.kind,
-    readyState: event.track.readyState,
-    enabled: event.track.enabled,
-    streamTracks: stream.getTracks().map((track) => ({
-      kind: track.kind,
-      readyState: track.readyState,
-    })),
-  });
+      console.log("Remote track received:", {
+        kind: event.track.kind,
+        readyState: event.track.readyState,
+        enabled: event.track.enabled,
+      });
+    };
 
-  event.track.onended = () => {
-    console.log("Remote track ended:", event.track.kind);
-  };
-};
-
-    // ------------------------------------------
-    // SEND LOCAL ICE CANDIDATES
-    // ------------------------------------------
+    // SEND LOCAL ICE
 
     peer.onicecandidate = (event) => {
       if (peerRef.current !== peer) return;
@@ -298,26 +289,28 @@ peer.ontrack = (event) => {
       }
     };
 
-    // ------------------------------------------
     // CONNECTION STATE
-    // ------------------------------------------
 
     peer.onconnectionstatechange = () => {
       if (peerRef.current !== peer) return;
 
-      console.log("Peer connection state:", peer.connectionState);
+      console.log(
+        "Peer connection state:",
+        peer.connectionState
+      );
 
       setConnectionState(peer.connectionState);
     };
 
-    // ------------------------------------------
-    // ICE CONNECTION STATE
-    // ------------------------------------------
+    // ICE STATE
 
     peer.oniceconnectionstatechange = () => {
       if (peerRef.current !== peer) return;
 
-      console.log("ICE connection state:", peer.iceConnectionState);
+      console.log(
+        "ICE connection state:",
+        peer.iceConnectionState
+      );
 
       if (peer.iceConnectionState === "failed") {
         console.error(
@@ -326,19 +319,14 @@ peer.ontrack = (event) => {
       }
     };
 
-    // ------------------------------------------
-    // ICE GATHERING STATE
-    // ------------------------------------------
-
     peer.onicegatheringstatechange = () => {
       if (peerRef.current !== peer) return;
 
-      console.log("ICE gathering state:", peer.iceGatheringState);
+      console.log(
+        "ICE gathering state:",
+        peer.iceGatheringState
+      );
     };
-
-    // ------------------------------------------
-    // ICE CANDIDATE ERRORS
-    // ------------------------------------------
 
     peer.onicecandidateerror = (event) => {
       console.error("ICE candidate error:", {
@@ -352,7 +340,7 @@ peer.ontrack = (event) => {
   }, [sendLocalCandidate]);
 
   // ==========================================
-  // 10. ADD LOCAL TRACKS TO PEER
+  // 10. ADD LOCAL TRACKS
   // ==========================================
 
   const addLocalTracks = useCallback((peer, stream) => {
@@ -380,7 +368,24 @@ peer.ontrack = (event) => {
   );
 
   // ==========================================
-  // 12. CREATE OFFER - CALLER
+  // 12. RESET CALL STATE
+  // ==========================================
+
+  const resetCallState = useCallback(() => {
+    pendingCandidatesRef.current = [];
+    pendingLocalCandidatesRef.current = [];
+
+    candidateQueueRef.current = Promise.resolve();
+
+    remoteStreamRef.current = null;
+
+    setRemoteStream(null);
+    setConnectionState("new");
+    setMediaError("");
+  }, []);
+
+  // ==========================================
+  // 13. CREATE OFFER - CALLER
   // ==========================================
 
   const createOffer = useCallback(
@@ -388,52 +393,59 @@ peer.ontrack = (event) => {
       const generation = callGenerationRef.current;
 
       try {
+        if (!["audio", "video"].includes(callType)) {
+          throw new Error("Invalid call type.");
+        }
+
+        if (peerRef.current) {
+          throw new Error(
+            "Another call is already being prepared."
+          );
+        }
+
         callContextRef.current = {
           recipientId,
           callId: null,
         };
 
-        pendingCandidatesRef.current = [];
-        pendingLocalCandidatesRef.current = [];
-        candidateQueueRef.current = Promise.resolve();
+        resetCallState();
 
-        remoteStreamRef.current = null;
-        setRemoteStream(null);
-
-        setConnectionState("new");
-        setMediaError("");
-
-        // Get the caller's camera and microphone.
         const stream = await getLocalMedia(callType);
 
-        // Check whether the call was cancelled.
         if (generation !== callGenerationRef.current) {
           stopStream(stream);
-
-          if (localStreamRef.current === stream) {
-            localStreamRef.current = null;
-            setLocalStream(null);
-          }
-
           throw new Error("Call was cancelled.");
         }
 
         const peer = createPeerConnection();
 
-        // Add caller's audio and video tracks.
         addLocalTracks(peer, stream);
 
-        // Create the offer.
         const offer = await peer.createOffer();
+
+        if (generation !== callGenerationRef.current) {
+          throw new Error("Call was cancelled.");
+        }
 
         await peer.setLocalDescription(offer);
 
-        console.log("Video/audio offer created:", {
+        if (generation !== callGenerationRef.current) {
+          throw new Error("Call was cancelled.");
+        }
+
+        const result = peer.localDescription;
+
+        if (!result?.sdp) {
+          throw new Error("Could not generate WebRTC offer.");
+        }
+
+        console.log("WebRTC offer created:", {
+          type: result.type,
+          hasSdp: Boolean(result.sdp),
           callType,
-          tracks: stream.getTracks().map((track) => track.kind),
         });
 
-        return peer.localDescription;
+        return result;
       } catch (error) {
         console.error("Create offer error:", error);
 
@@ -445,6 +457,7 @@ peer.ontrack = (event) => {
       }
     },
     [
+      resetCallState,
       getLocalMedia,
       createPeerConnection,
       addLocalTracks,
@@ -453,75 +466,96 @@ peer.ontrack = (event) => {
   );
 
   // ==========================================
-  // 13. CREATE ANSWER - RECEIVER
+  // 14. CREATE ANSWER - RECEIVER
   // ==========================================
 
   const createAnswer = useCallback(
     async (callerId, callId, callType = "video", offer) => {
       const generation = callGenerationRef.current;
-
+console.log("CREATE ANSWER INPUT CHECK:", {
+  callerId,
+  callId,
+  callType,
+  hasOffer: Boolean(offer),
+  offerType: offer?.type,
+  hasSdp: Boolean(offer?.sdp),
+  sdpLength: offer?.sdp?.length || 0,
+});
       try {
+        if (!["audio", "video"].includes(callType)) {
+          throw new Error("Invalid call type.");
+        }
+
+        // Validate offer BEFORE requesting media.
+
+        if (
+          !offer ||
+          offer.type !== "offer" ||
+          typeof offer.sdp !== "string" ||
+          !offer.sdp.trim()
+        ) {
+          throw new Error(
+            "The incoming call offer is missing or invalid."
+          );
+        }
+
+        if (peerRef.current) {
+          throw new Error(
+            "Another peer connection already exists."
+          );
+        }
+
         callContextRef.current = {
           recipientId: callerId,
           callId,
         };
 
-        // Preserve remote ICE candidates received while ringing.
-        pendingLocalCandidatesRef.current = [];
-        candidateQueueRef.current = Promise.resolve();
+        resetCallState();
 
-        remoteStreamRef.current = null;
-        setRemoteStream(null);
-
-        setConnectionState("new");
-        setMediaError("");
-
-        if (!offer) {
-          throw new Error("The incoming call offer is missing.");
-        }
-
-        // Get the receiver's own camera and microphone.
         const stream = await getLocalMedia(callType);
 
-        // Check whether the call was cancelled.
         if (generation !== callGenerationRef.current) {
           stopStream(stream);
-
-          if (localStreamRef.current === stream) {
-            localStreamRef.current = null;
-            setLocalStream(null);
-          }
-
           throw new Error("Call was cancelled.");
         }
 
         const peer = createPeerConnection();
 
-        // Add receiver's audio and video tracks.
         addLocalTracks(peer, stream);
 
-        // Apply caller's offer.
         await peer.setRemoteDescription(
           new RTCSessionDescription(offer)
         );
 
-        // Add remote ICE candidates received before the offer.
+        if (generation !== callGenerationRef.current) {
+          throw new Error("Call was cancelled.");
+        }
+
         await flushPendingCandidates();
 
-        // Create answer.
         const answer = await peer.createAnswer();
 
         await peer.setLocalDescription(answer);
 
-        // Send local ICE candidates.
+        if (generation !== callGenerationRef.current) {
+          throw new Error("Call was cancelled.");
+        }
+
         flushLocalCandidates();
 
-        console.log("Video/audio answer created:", {
+        const result = peer.localDescription;
+
+        if (!result?.sdp) {
+          throw new Error("Could not generate WebRTC answer.");
+        }
+
+        console.log("WebRTC answer created:", {
+          type: result.type,
+          hasSdp: Boolean(result.sdp),
           callType,
-          tracks: stream.getTracks().map((track) => track.kind),
         });
 
-        return peer.localDescription;
+        return result;
       } catch (error) {
         console.error("Create answer error:", error);
 
@@ -533,6 +567,7 @@ peer.ontrack = (event) => {
       }
     },
     [
+      resetCallState,
       getLocalMedia,
       createPeerConnection,
       addLocalTracks,
@@ -543,7 +578,7 @@ peer.ontrack = (event) => {
   );
 
   // ==========================================
-  // 14. HANDLE REMOTE ANSWER
+  // 15. HANDLE REMOTE ANSWER
   // ==========================================
 
   const handleRemoteAnswer = useCallback(
@@ -552,15 +587,24 @@ peer.ontrack = (event) => {
         const peer = peerRef.current;
 
         if (!peer) {
-          throw new Error("Peer connection does not exist.");
+          throw new Error(
+            "Peer connection does not exist."
+          );
         }
 
-        if (!answer) {
-          throw new Error("The remote answer is missing.");
+        if (
+          !answer ||
+          answer.type !== "answer" ||
+          typeof answer.sdp !== "string" ||
+          !answer.sdp.trim()
+        ) {
+          throw new Error("The remote answer is invalid.");
         }
 
         if (peer.remoteDescription) {
-          console.warn("Remote answer has already been applied.");
+          console.warn(
+            "Remote description has already been applied."
+          );
           return;
         }
 
@@ -572,9 +616,13 @@ peer.ontrack = (event) => {
 
         console.log("Remote answer applied successfully.");
       } catch (error) {
-        console.error("Error handling remote answer:", error);
+        console.error(
+          "Error handling remote answer:",
+          error
+        );
 
         setMediaError(error.message);
+
         throw error;
       }
     },
@@ -582,7 +630,7 @@ peer.ontrack = (event) => {
   );
 
   // ==========================================
-  // 15. HANDLE REMOTE ICE CANDIDATE
+  // 16. HANDLE REMOTE ICE CANDIDATE
   // ==========================================
 
   const handleRemoteCandidate = useCallback(
@@ -591,7 +639,6 @@ peer.ontrack = (event) => {
 
       const peer = peerRef.current;
 
-      // Save candidates received before the remote description.
       if (!peer || !peer.remoteDescription) {
         pendingCandidatesRef.current.push(candidate);
 
@@ -606,14 +653,12 @@ peer.ontrack = (event) => {
   );
 
   // ==========================================
-  // 16. CLEAN UP CALL
+  // 17. CLEAN UP CALL
   // ==========================================
 
   const cleanupCall = useCallback(() => {
-    // Invalidate pending media requests and async operations.
     callGenerationRef.current += 1;
 
-    // Close peer connection.
     if (peerRef.current) {
       peerRef.current.ontrack = null;
       peerRef.current.onicecandidate = null;
@@ -626,27 +671,22 @@ peer.ontrack = (event) => {
       peerRef.current = null;
     }
 
-    // Stop local camera and microphone.
     stopStream(localStreamRef.current);
     localStreamRef.current = null;
 
-    // Stop remote media tracks.
     stopStream(remoteStreamRef.current);
     remoteStreamRef.current = null;
 
-    // Clear candidate queues.
     pendingCandidatesRef.current = [];
     pendingLocalCandidatesRef.current = [];
 
     candidateQueueRef.current = Promise.resolve();
 
-    // Clear call information.
     callContextRef.current = {
       recipientId: null,
       callId: null,
     };
 
-    // Reset UI.
     setLocalStream(null);
     setRemoteStream(null);
     setConnectionState("idle");
@@ -656,7 +696,7 @@ peer.ontrack = (event) => {
   }, [stopStream]);
 
   // ==========================================
-  // 17. CLEAN UP WHEN HOOK UNMOUNTS
+  // 18. CLEAN UP WHEN UNMOUNTED
   // ==========================================
 
   useEffect(() => {
@@ -666,7 +706,7 @@ peer.ontrack = (event) => {
   }, [cleanupCall]);
 
   // ==========================================
-  // 18. RETURN VALUES
+  // 19. RETURN VALUES
   // ==========================================
 
   return {
