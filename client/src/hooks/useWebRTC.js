@@ -472,15 +472,7 @@ export default function useWebRTC(socket) {
   const createAnswer = useCallback(
     async (callerId, callId, callType = "video", offer) => {
       const generation = callGenerationRef.current;
-console.log("CREATE ANSWER INPUT CHECK:", {
-  callerId,
-  callId,
-  callType,
-  hasOffer: Boolean(offer),
-  offerType: offer?.type,
-  hasSdp: Boolean(offer?.sdp),
-  sdpLength: offer?.sdp?.length || 0,
-});
+
       try {
         if (!["audio", "video"].includes(callType)) {
           throw new Error("Invalid call type.");
