@@ -191,13 +191,19 @@ router.get("/:groupId/messages", requireAuth, async (req, res, next) => {
   .lean();
 
    
+
 res.json({
   messages: messages.map((message) => ({
     id: message._id.toString(),
-    groupId: message.group.toString(),
-    senderId: message.sender._id.toString(),
-    senderName: message.sender.username,
-    text: message.text,
+    groupId: message.group?.toString() || group._id.toString(),
+
+    senderId: message.sender?._id?.toString() || null,
+    senderName: message.sender?.username || "Deleted User",
+
+    text: message.isDeleted ? "This message was deleted" : message.text,
+
+    isDeleted: Boolean(message.isDeleted),
+
     attachment: message.attachment?.url
       ? {
           url: message.attachment.url,
@@ -206,6 +212,7 @@ res.json({
           size: message.attachment.size,
         }
       : null,
+
     createdAt: message.createdAt,
     updatedAt: message.updatedAt,
   })),
