@@ -190,8 +190,6 @@ router.get("/:groupId/messages", requireAuth, async (req, res, next) => {
   })
   .lean();
 
-   
-
 res.json({
   messages: messages.map((message) => ({
     id: message._id.toString(),

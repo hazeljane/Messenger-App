@@ -1842,7 +1842,7 @@ async function handleLogout() {
   }
   isMuted={isMuted}
   isCameraOff={isCameraOff}
-  onAccept={handleAcceptIncoming}
+  onAccept={() => handleAcceptIncoming}
   onDecline={handleDeclineIncoming}
   onEnd={handleEndCall}
   onToggleMute={handleToggleMute}
